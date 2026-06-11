@@ -1,4 +1,4 @@
-# CodeAtlas — GitHub Activity Intelligence Platform
+# CodeAtlas: GitHub Activity Intelligence Platform
 
 CodeAtlas transforms raw Git history (commits, pull requests, issues) into actionable visual engineering metrics. It maps developer collaboration networks, measures recursive code ownership to highlight knowledge silos, and maps complexity-vs-churn hotspots to optimize refactoring cycles.
 
