@@ -80,14 +80,14 @@ export default function HotspotsVisualizer({ hotspots }: HotspotsVisualizerProps
                 // Y axis is inverted in SVG
                 const y = padding.top + (1 - file.complexity / 100) * (plotHeight - padding.top - padding.bottom);
                 
-                let dotColor = 'var(--accent-green)';
-                let glowColor = 'rgba(0, 245, 160, 0.4)';
+                let dotColor = '#10b981';
+                let glowColor = 'rgba(16, 185, 129, 0.4)';
                 if (file.status === 'critical') {
-                  dotColor = 'var(--accent-red)';
-                  glowColor = 'rgba(255, 77, 77, 0.6)';
+                  dotColor = '#ef4444';
+                  glowColor = 'rgba(239, 68, 68, 0.6)';
                 } else if (file.status === 'warning') {
-                  dotColor = 'var(--accent-orange)';
-                  glowColor = 'rgba(255, 159, 67, 0.6)';
+                  dotColor = '#f97316';
+                  glowColor = 'rgba(249, 115, 22, 0.6)';
                 }
 
                 const isHovered = hoveredFile?.path === file.path;
@@ -360,24 +360,24 @@ export default function HotspotsVisualizer({ hotspots }: HotspotsVisualizerProps
           text-align: center;
         }
         .status-stable {
-          background: rgba(0, 245, 160, 0.08);
-          border: 1px solid rgba(0, 245, 160, 0.2);
-          color: var(--accent-green);
+          background: rgba(16, 185, 129, 0.08);
+          border: 1px solid rgba(16, 185, 129, 0.2);
+          color: #10b981;
         }
         .status-warning {
-          background: rgba(255, 159, 67, 0.08);
-          border: 1px solid rgba(255, 159, 67, 0.2);
-          color: var(--accent-orange);
+          background: rgba(249, 115, 22, 0.08);
+          border: 1px solid rgba(249, 115, 22, 0.2);
+          color: #f97316;
         }
         .status-critical {
-          background: rgba(255, 77, 77, 0.08);
-          border: 1px solid rgba(255, 77, 77, 0.2);
-          color: var(--accent-red);
+          background: rgba(239, 68, 68, 0.08);
+          border: 1px solid rgba(239, 68, 68, 0.2);
+          color: #ef4444;
         }
         
-        .icon-green { color: var(--accent-green); }
-        .icon-orange { color: var(--accent-orange); }
-        .icon-red { color: var(--accent-red); }
+        .icon-green { color: #10b981; }
+        .icon-orange { color: #f97316; }
+        .icon-red { color: #ef4444; }
         .icon-cyan { color: var(--accent-cyan); }
         .font-mono {
           font-family: var(--font-mono);

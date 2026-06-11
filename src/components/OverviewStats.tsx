@@ -145,16 +145,16 @@ export default function OverviewStats({ stats }: OverviewStatsProps) {
           justify-content: center;
         }
         .circle-green {
-          background: rgba(0, 245, 160, 0.08);
-          border: 1px solid rgba(0, 245, 160, 0.15);
+          background: rgba(16, 185, 129, 0.08);
+          border: 1px solid rgba(16, 185, 129, 0.15);
         }
         .circle-orange {
-          background: rgba(255, 159, 67, 0.08);
-          border: 1px solid rgba(255, 159, 67, 0.15);
+          background: rgba(249, 115, 22, 0.08);
+          border: 1px solid rgba(249, 115, 22, 0.15);
         }
         .circle-cyan {
-          background: rgba(0, 210, 255, 0.08);
-          border: 1px solid rgba(0, 210, 255, 0.15);
+          background: rgba(255, 69, 48, 0.08);
+          border: 1px solid rgba(255, 69, 48, 0.15);
         }
         .circle-purple {
           background: rgba(171, 112, 255, 0.08);
@@ -199,12 +199,16 @@ export default function OverviewStats({ stats }: OverviewStatsProps) {
           border-radius: 4px;
           border: 1px solid currentColor;
         }
-        .text-green { color: var(--accent-green); }
-        .border-green { border-color: rgba(0, 245, 160, 0.3); }
-        .text-orange { color: var(--accent-orange); }
-        .border-orange { border-color: rgba(255, 159, 67, 0.3); }
-        .text-red { color: var(--accent-red); }
-        .border-red { border-color: rgba(255, 77, 77, 0.3); }
+         .text-green { color: #10b981; }
+        .border-green { border-color: rgba(16, 185, 129, 0.3); }
+        .text-orange { color: #f97316; }
+        .border-orange { border-color: rgba(249, 115, 22, 0.3); }
+        .text-red { color: #ef4444; }
+        .border-red { border-color: rgba(239, 68, 68, 0.3); }
+        .icon-green { color: #10b981; }
+        .icon-orange { color: #f97316; }
+        .icon-cyan { color: var(--accent-cyan); }
+        .icon-purple { color: var(--accent-purple); }
         
         .stat-desc {
           font-size: 0.75rem;

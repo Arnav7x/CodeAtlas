@@ -6,36 +6,65 @@
 }
 
 :root {
-  /* Design Tokens */
+  /* Design Tokens - Light Theme (Default) */
+  --bg-primary: #f8fafc;
+  --bg-secondary: #f1f5f9;
+  --bg-tertiary: #e2e8f0;
+  --bg-card: rgba(255, 255, 255, 0.75);
+  
+  --border-color: rgba(15, 23, 42, 0.08);
+  --border-glow: rgba(255, 69, 48, 0.08);
+  --border-focus: rgba(255, 69, 48, 0.4);
+  
+  --fg-primary: #0f172a;
+  --fg-secondary: #475569;
+  --fg-tertiary: #94a3b8;
+  
+  /* Red-Orange Accent Setup */
+  --accent-cyan: #ff4530; /* Red-Orange start */
+  --accent-green: #ff8a00; /* Red-Orange end */
+  --accent-purple: #ab70ff; /* Secondary accent */
+  --accent-orange: #ff8a00;
+  --accent-red: #ff4530;
+  
+  --shadow-glow: 0 0 20px rgba(255, 69, 48, 0.1);
+  --shadow-glow-cyan: 0 0 20px rgba(255, 138, 0, 0.1);
+  --shadow-glow-purple: 0 0 20px rgba(171, 112, 255, 0.1);
+  
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(15, 23, 42, 0.07);
+  --glass-blur: blur(16px);
+  
+  --font-sans: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-geist-mono), Courier, monospace;
+  --font-serif: var(--font-cormorant), Georgia, "Times New Roman", serif;
+  
+  --background-grid-color: rgba(15, 23, 42, 0.015);
+}
+
+/* Dark Theme Variables */
+body.dark-theme {
   --bg-primary: #040406;
   --bg-secondary: #090a0f;
   --bg-tertiary: #11131c;
   --bg-card: rgba(13, 14, 22, 0.65);
   
   --border-color: rgba(255, 255, 255, 0.07);
-  --border-glow: rgba(0, 245, 160, 0.12);
-  --border-focus: rgba(0, 210, 255, 0.4);
+  --border-glow: rgba(255, 69, 48, 0.15);
+  --border-focus: rgba(255, 69, 48, 0.5);
   
   --fg-primary: #f8fafc;
   --fg-secondary: #94a3b8;
   --fg-tertiary: #64748b;
   
-  --accent-cyan: #00d2ff;
-  --accent-green: #00f5a0;
-  --accent-purple: #ab70ff;
-  --accent-orange: #ff9f43;
-  --accent-red: #ff4d4d;
-  
-  --shadow-glow: 0 0 20px rgba(0, 245, 160, 0.15);
-  --shadow-glow-cyan: 0 0 20px rgba(0, 210, 255, 0.15);
+  --shadow-glow: 0 0 20px rgba(255, 69, 48, 0.2);
+  --shadow-glow-cyan: 0 0 20px rgba(255, 138, 0, 0.2);
   --shadow-glow-purple: 0 0 20px rgba(171, 112, 255, 0.15);
   
   --glass-bg: rgba(9, 10, 16, 0.7);
   --glass-border: rgba(255, 255, 255, 0.06);
-  --glass-blur: blur(16px);
   
-  --font-sans: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-mono: var(--font-geist-mono), Courier, monospace;
+  --background-grid-color: rgba(255, 255, 255, 0.012);
 }
 
 html, body {
@@ -46,6 +75,7 @@ html, body {
   overflow-x: hidden;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.4s cubic-bezier(0.16, 1, 0.3, 1), color 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* Custom Grid Background Overlay */
@@ -58,13 +88,77 @@ body::before {
   height: 100vh;
   z-index: -2;
   background-image: 
-    radial-gradient(circle at 30% 20%, rgba(171, 112, 255, 0.05) 0%, transparent 40%),
-    radial-gradient(circle at 80% 70%, rgba(0, 245, 160, 0.05) 0%, transparent 40%),
-    linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
-  background-size: 100% 100%, 100% 100%, 40px 40px, 40px 40px;
+    radial-gradient(circle at 20% 30%, rgba(255, 69, 48, 0.03) 0%, transparent 45%),
+    radial-gradient(circle at 80% 80%, rgba(255, 138, 0, 0.03) 0%, transparent 45%),
+    linear-gradient(var(--background-grid-color) 1px, transparent 1px),
+    linear-gradient(90deg, var(--background-grid-color) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 50px 50px, 50px 50px;
   background-position: 0 0;
   pointer-events: none;
+  animation: grid-pulse 10s ease-in-out infinite alternate;
+}
+
+body.dark-theme::before {
+  background-image: 
+    radial-gradient(circle at 20% 30%, rgba(255, 69, 48, 0.05) 0%, transparent 45%),
+    radial-gradient(circle at 80% 80%, rgba(255, 138, 0, 0.05) 0%, transparent 45%),
+    linear-gradient(var(--background-grid-color) 1px, transparent 1px),
+    linear-gradient(90deg, var(--background-grid-color) 1px, transparent 1px);
+}
+
+@keyframes grid-pulse {
+  0% {
+    background-size: 100% 100%, 100% 100%, 50px 50px, 50px 50px;
+    opacity: 0.95;
+  }
+  100% {
+    background-size: 100% 100%, 100% 100%, 55px 55px, 55px 55px;
+    opacity: 1;
+  }
+}
+
+/* Background floating decorative elements (Constellation Constellations) */
+.constellation-bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.star {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  background-color: var(--fg-tertiary);
+  border-radius: 50%;
+  opacity: 0.15;
+}
+
+.star-1 { top: 15%; left: 25%; animation: twinkle 8s infinite alternate; }
+.star-2 { top: 40%; left: 80%; animation: twinkle 12s infinite alternate; }
+.star-3 { top: 75%; left: 15%; animation: twinkle 10s infinite alternate; }
+.star-4 { top: 60%; left: 65%; animation: twinkle 14s infinite alternate; }
+
+@keyframes twinkle {
+  0% { opacity: 0.08; transform: scale(0.9); }
+  50% { opacity: 0.25; transform: scale(1.3); }
+  100% { opacity: 0.08; transform: scale(0.9); }
+}
+
+/* Serif Typography Class */
+.roman-header {
+  font-family: var(--font-serif);
+  font-weight: 400; /* Garamond looks best at 400 or 500, not bold-heavy */
+  letter-spacing: -0.01em;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-serif);
+  font-weight: 500;
 }
 
 /* Scrollbars */
@@ -90,6 +184,11 @@ body::before {
   -webkit-backdrop-filter: var(--glass-blur);
   border: 1px solid var(--glass-border);
   border-radius: 12px;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.1);
+  transition: background-color 0.4s ease, border-color 0.4s ease;
+}
+
+body.dark-theme .glass-panel {
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
 }
 
@@ -103,9 +202,14 @@ body::before {
 }
 
 .glass-card:hover {
-  border-color: rgba(255, 255, 255, 0.12);
+  border-color: rgba(15, 23, 42, 0.15);
   transform: translateY(-2px);
-  box-shadow: 0 12px 24px -10px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 12px 24px -10px rgba(15, 23, 42, 0.12);
+}
+
+body.dark-theme .glass-card:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 12px 24px -10px rgba(0, 0, 0, 0.4);
 }
 
 .glass-card-interactive {
@@ -114,7 +218,7 @@ body::before {
 
 /* Input Fields */
 .glass-input {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(0, 0, 0, 0.015);
   border: 1px solid var(--glass-border);
   border-radius: 8px;
   color: var(--fg-primary);
@@ -123,11 +227,17 @@ body::before {
   outline: none;
   transition: all 0.2s ease;
 }
+body.dark-theme .glass-input {
+  background: rgba(255, 255, 255, 0.02);
+}
 
 .glass-input:focus {
   border-color: var(--border-focus);
-  box-shadow: 0 0 10px rgba(0, 210, 255, 0.2);
-  background: rgba(255, 255, 255, 0.05);
+  box-shadow: 0 0 10px rgba(255, 69, 48, 0.15);
+  background: rgba(255, 255, 255, 0.9);
+}
+body.dark-theme .glass-input:focus {
+  background: rgba(255, 255, 255, 0.04);
 }
 
 /* Custom Buttons */
@@ -149,26 +259,33 @@ body::before {
 
 .btn-primary {
   background: linear-gradient(135deg, var(--accent-cyan), var(--accent-green));
-  color: #040406;
+  color: #f8fafc; /* light text for red-orange gradient */
   font-weight: 600;
-  box-shadow: 0 4px 20px rgba(0, 245, 160, 0.2);
+  box-shadow: 0 4px 20px rgba(255, 69, 48, 0.15);
 }
 
 .btn-primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 24px rgba(0, 245, 160, 0.35);
+  box-shadow: 0 6px 24px rgba(255, 69, 48, 0.25);
   filter: brightness(1.05);
 }
 
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(0, 0, 0, 0.03);
   border-color: var(--glass-border);
   color: var(--fg-primary);
 }
+body.dark-theme .btn-secondary {
+  background: rgba(255, 255, 255, 0.03);
+}
 
 .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.09);
-  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(15, 23, 42, 0.15);
+}
+body.dark-theme .btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
 .btn-danger {
@@ -201,16 +318,12 @@ body::before {
 }
 
 @keyframes fade-in-up {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes draw {
-  to { stroke-dashoffset: 0; }
-}
-
 .animate-fade-in {
-  animation: fade-in-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: fade-in-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .animate-pulse-slow {

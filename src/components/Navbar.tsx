@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { GitBranch, Settings, Key, Check, AlertCircle, Home } from 'lucide-react';
+import { GitBranch, Settings, Key, Check, AlertCircle, Home, Sun, Moon } from 'lucide-react';
 
 interface NavbarProps {
   currentRepo?: string;
@@ -12,11 +12,34 @@ export default function Navbar({ currentRepo }: NavbarProps) {
   const [showSettings, setShowSettings] = useState(false);
   const [token, setToken] = useState('');
   const [isSaved, setIsSaved] = useState(false);
+  const [isDarkTheme, setIsDarkTheme] = useState(false);
 
   useEffect(() => {
     const savedToken = localStorage.getItem('github_pat') || '';
     setToken(savedToken);
+
+    // Initial theme set
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'dark') {
+      setIsDarkTheme(true);
+      document.body.classList.add('dark-theme');
+    } else {
+      setIsDarkTheme(false);
+      document.body.classList.remove('dark-theme');
+    }
   }, []);
+
+  const toggleTheme = () => {
+    if (isDarkTheme) {
+      document.body.classList.remove('dark-theme');
+      localStorage.setItem('theme', 'light');
+      setIsDarkTheme(false);
+    } else {
+      document.body.classList.add('dark-theme');
+      localStorage.setItem('theme', 'dark');
+      setIsDarkTheme(true);
+    }
+  };
 
   const handleSaveToken = () => {
     localStorage.setItem('github_pat', token);
@@ -62,6 +85,15 @@ export default function Navbar({ currentRepo }: NavbarProps) {
             <span>Overview</span>
           </Link>
           
+          <button 
+            onClick={toggleTheme} 
+            className="btn btn-secondary btn-sm"
+            style={{ padding: '6px 10px', fontSize: '0.85rem' }}
+            title={isDarkTheme ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
+          >
+            {isDarkTheme ? <Sun size={14} className="icon-orange" /> : <Moon size={14} className="icon-purple" />}
+          </button>
+
           <button 
             onClick={() => setShowSettings(!showSettings)} 
             className={`btn btn-secondary btn-sm ${showSettings ? 'active' : ''}`}
@@ -114,7 +146,7 @@ export default function Navbar({ currentRepo }: NavbarProps) {
           top: 0;
           z-index: 100;
           width: 100%;
-          background: rgba(4, 4, 6, 0.7);
+          background: var(--glass-bg);
           backdrop-filter: blur(12px);
           -webkit-backdrop-filter: blur(12px);
           border-bottom: 1px solid var(--border-color);
@@ -139,16 +171,16 @@ export default function Navbar({ currentRepo }: NavbarProps) {
           width: 32px;
           height: 32px;
           border-radius: 8px;
-          background: linear-gradient(135deg, rgba(0, 210, 255, 0.1), rgba(0, 245, 160, 0.1));
-          border: 1px solid var(--accent-green);
+          background: linear-gradient(135deg, rgba(255, 69, 48, 0.1), rgba(255, 138, 0, 0.1));
+          border: 1px solid var(--accent-cyan);
           display: flex;
           align-items: center;
           justify-content: center;
-          box-shadow: 0 0 10px rgba(0, 245, 160, 0.15);
+          box-shadow: 0 0 10px rgba(255, 69, 48, 0.15);
         }
         .icon-glow {
-          color: var(--accent-green);
-          filter: drop-shadow(0 0 4px var(--accent-green));
+          color: var(--accent-cyan);
+          filter: drop-shadow(0 0 4px var(--accent-cyan));
         }
         .logo-text {
           font-size: 1.15rem;
@@ -169,8 +201,8 @@ export default function Navbar({ currentRepo }: NavbarProps) {
           width: 6px;
           height: 6px;
           border-radius: 50%;
-          background-color: var(--accent-green);
-          box-shadow: 0 0 8px var(--accent-green);
+          background-color: var(--accent-cyan);
+          box-shadow: 0 0 8px var(--accent-cyan);
         }
         .current-repo-text {
           font-family: var(--font-mono);

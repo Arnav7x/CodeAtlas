@@ -17,7 +17,7 @@ async function fetchGithub(url: string, token?: string) {
       throw new Error('Github API rate limit exceeded. Please provide a Personal Access Token (PAT) in the header to continue.');
     }
   }
-  
+
   if (!res.ok) {
     throw new Error(`Github API error: ${res.statusText} (${res.status})`);
   }

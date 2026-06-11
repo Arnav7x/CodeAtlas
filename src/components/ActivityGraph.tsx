@@ -143,7 +143,7 @@ export default function ActivityGraph({ activity, developers, connections }: Act
                 stroke="var(--accent-cyan)" 
                 strokeWidth="2.5" 
                 strokeLinecap="round"
-                filter="drop-shadow(0 0 4px rgba(0, 210, 255, 0.3))"
+                filter="drop-shadow(0 0 4px rgba(255, 69, 48, 0.3))"
               />
             )}
 

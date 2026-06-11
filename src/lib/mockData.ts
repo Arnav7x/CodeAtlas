@@ -339,7 +339,7 @@ export const MOCK_REPOSITORIES: Record<string, RepositoryData> = {
       },
       {
         id: "next-hotspot-1",
-        type: "critical",
+        type: "danger",
         category: "Hotspot",
         title: "App Router Server Controller is Unstable",
         description: "app-router.tsx is experiencing extreme churn (94 modifications) and correlates with 45% of recent Next Server bug fixes.",
