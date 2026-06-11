@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { ActivityPoint, DevNode, DevLink } from '../lib/mockData';
 import { Calendar, GitCommit, GitMerge, Info, Cpu, Users } from 'lucide-react';
 
@@ -20,8 +20,7 @@ export default function ActivityGraph({ activity, developers, connections }: Act
   const center = { x: width / 2, y: height / 2 };
   const radius = 95; // Radius of node circle
 
-  // Compute developer positions in a circle
-  const devPositions = useMemo(() => {
+  const [devPositions, setDevPositions] = useState<Record<string, { x: number; y: number }>>(() => {
     const pos: Record<string, { x: number; y: number }> = {};
     developers.forEach((dev, idx) => {
       const angle = (idx / developers.length) * 2 * Math.PI - Math.PI / 2; // Start from top
@@ -31,7 +30,49 @@ export default function ActivityGraph({ activity, developers, connections }: Act
       };
     });
     return pos;
-  }, [developers, center.x, center.y, radius]);
+  });
+
+  const [draggedDevId, setDraggedDevId] = useState<string | null>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+
+  // Keep positions updated if the developers list changes
+  useEffect(() => {
+    const pos: Record<string, { x: number; y: number }> = {};
+    developers.forEach((dev, idx) => {
+      const angle = (idx / developers.length) * 2 * Math.PI - Math.PI / 2;
+      pos[dev.id] = {
+        x: center.x + radius * Math.cos(angle),
+        y: center.y + radius * Math.sin(angle)
+      };
+    });
+    setDevPositions(pos);
+  }, [developers]);
+
+  const handleMouseDown = (devId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    setDraggedDevId(devId);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!draggedDevId || !svgRef.current) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    // Convert client coordinates to SVG coordinates
+    const x = ((e.clientX - rect.left) / rect.width) * width;
+    const y = ((e.clientY - rect.top) / rect.height) * height;
+    
+    // Constrain within viewBox bounds with padding
+    const boundedX = Math.max(20, Math.min(width - 20, x));
+    const boundedY = Math.max(20, Math.min(height - 20, y));
+
+    setDevPositions(prev => ({
+      ...prev,
+      [draggedDevId]: { x: boundedX, y: boundedY }
+    }));
+  };
+
+  const handleMouseUp = () => {
+    setDraggedDevId(null);
+  };
 
   // Compute connections matching current hover/selected developer
   const activeLinks = useMemo(() => {
@@ -219,7 +260,14 @@ export default function ActivityGraph({ activity, developers, connections }: Act
 
         <div className="network-inner">
           <div className="network-svg-container">
-            <svg viewBox={`0 0 ${width} ${height}`} className="network-svg">
+            <svg 
+              ref={svgRef}
+              viewBox={`0 0 ${width} ${height}`} 
+              className="network-svg"
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseUp}
+            >
               {/* Draw Background Connections */}
               {connections.map((link, idx) => {
                 const sourcePos = devPositions[link.source];
@@ -306,9 +354,13 @@ export default function ActivityGraph({ activity, developers, connections }: Act
                     transform={`translate(${pos.x}, ${pos.y})`}
                     className="node-group"
                     onClick={() => setSelectedDev(dev)}
+                    onMouseDown={(e) => handleMouseDown(dev.id, e)}
                     onMouseEnter={() => setHoveredDev(dev.id)}
                     onMouseLeave={() => setHoveredDev(null)}
-                    style={{ cursor: 'pointer' }}
+                    style={{ 
+                      cursor: draggedDevId === dev.id ? 'grabbing' : 'grab',
+                      transition: draggedDevId === dev.id ? 'none' : undefined
+                    }}
                   >
                     {/* Glowing outer circle */}
                     <circle 

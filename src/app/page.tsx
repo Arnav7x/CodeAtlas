@@ -3,18 +3,13 @@
 import React from 'react';
 import Navbar from '../components/Navbar';
 import RepoConnector from '../components/RepoConnector';
+import BackgroundCanvas from '../components/BackgroundCanvas';
 import { GitPullRequest, Shield, BarChart3, HelpCircle, Activity, Globe, Zap } from 'lucide-react';
 
 export default function Home() {
   return (
     <div className="landing-layout animate-fade-in">
-      {/* Twinkling star constellations background */}
-      <div className="constellation-bg">
-        <div className="star star-1"></div>
-        <div className="star star-2"></div>
-        <div className="star star-3"></div>
-        <div className="star star-4"></div>
-      </div>
+      <BackgroundCanvas />
 
       <Navbar />
 

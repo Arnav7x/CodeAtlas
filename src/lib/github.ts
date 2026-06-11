@@ -49,6 +49,18 @@ export async function fetchRepositoryData(owner: string, repo: string, token?: s
     // 4. Fetch Commits (last 100)
     const commits: any[] = await fetchGithub(`https://api.github.com/repos/${owner}/${repo}/commits?per_page=100`, token);
 
+    // 4.5. Fetch Git Tree (recursive)
+    const branch = repoInfo.default_branch || 'main';
+    let treeItems: any[] = [];
+    try {
+      const gitTree = await fetchGithub(`https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`, token);
+      if (gitTree && Array.isArray(gitTree.tree)) {
+        treeItems = gitTree.tree;
+      }
+    } catch (e) {
+      console.warn('Could not fetch recursive git tree:', e);
+    }
+
     // Calculate Language Percentages
     const totalLangBytes = Object.values(languagesData).reduce((a, b) => a + b, 0);
     const colors = ['#3178c6', '#f1e05a', '#e34c26', '#89e051', '#563d7c', '#3572A5', '#f34b7d'];
@@ -91,12 +103,18 @@ export async function fetchRepositoryData(owner: string, repo: string, token?: s
       // Instead, we extract simulated file paths from commit messages or generate realistic ones.
       const msg = c.commit?.message?.toLowerCase() || '';
       let fakeFile = 'src/index.js';
-      if (msg.includes('css')) fakeFile = 'styles/theme.css';
-      else if (msg.includes('doc') || msg.includes('readme')) fakeFile = 'README.md';
-      else if (msg.includes('api') || msg.includes('fetch')) fakeFile = 'src/utils/api.ts';
-      else if (msg.includes('route') || msg.includes('page')) fakeFile = 'src/app/page.tsx';
-      else if (msg.includes('auth') || msg.includes('login')) fakeFile = 'src/services/auth.ts';
-      else if (msg.includes('test')) fakeFile = 'tests/index.test.ts';
+      const realFiles = treeItems.filter((item: any) => item.type === 'blob').map((item: any) => item.path);
+      if (realFiles.length > 0) {
+        const fileIndex = Math.abs(hashCode(c.commit?.message || '')) % realFiles.length;
+        fakeFile = realFiles[fileIndex];
+      } else {
+        if (msg.includes('css')) fakeFile = 'styles/theme.css';
+        else if (msg.includes('doc') || msg.includes('readme')) fakeFile = 'README.md';
+        else if (msg.includes('api') || msg.includes('fetch')) fakeFile = 'src/utils/api.ts';
+        else if (msg.includes('route') || msg.includes('page')) fakeFile = 'src/app/page.tsx';
+        else if (msg.includes('auth') || msg.includes('login')) fakeFile = 'src/services/auth.ts';
+        else if (msg.includes('test')) fakeFile = 'tests/index.test.ts';
+      }
 
       commitsByAuthor[authorLogin].files.add(fakeFile);
       if (!fileModificationCounts[fakeFile]) {
@@ -204,38 +222,76 @@ export async function fetchRepositoryData(owner: string, repo: string, token?: s
       type: 'directory',
       busFactor,
       primaryDev,
-      primaryPercentage: Math.floor(topShare * 100),
+      primaryPercentage: Math.max(1, Math.floor(topShare * 100)),
       secondaryDev,
-      secondaryPercentage: Math.floor(((developers[1]?.commits || 0) / totalCommitsSum) * 100) || 10,
-      children: [
-        {
-          name: 'src',
-          path: `${repo}/src`,
-          type: 'directory',
-          busFactor: Math.max(1, busFactor - 1),
-          primaryDev,
-          primaryPercentage: Math.floor(Math.min(95, topShare * 100 + 10)),
-          secondaryDev,
-          secondaryPercentage: Math.max(5, Math.floor(((developers[1]?.commits || 0) / totalCommitsSum) * 100) - 5),
-          children: Object.keys(fileModificationCounts).map(path => {
-            const fileBaseName = path.split('/').pop() || path;
-            const churnCount = fileModificationCounts[path].count;
-            const primaryDevShare = Math.floor(50 + Math.random() * 45);
-            return {
-              name: fileBaseName,
-              path: `${repo}/${path}`,
-              type: 'file',
-              size: Math.floor(Math.random() * 1200) + 100,
-              busFactor: primaryDevShare > 75 ? 1 : 2,
-              primaryDev: Math.random() > 0.3 ? primaryDev : secondaryDev,
-              primaryPercentage: primaryDevShare,
-              secondaryDev: Math.random() > 0.5 ? secondaryDev : (topDevs[2] || '@someone'),
-              secondaryPercentage: 100 - primaryDevShare
-            };
-          })
-        }
-      ]
+      secondaryPercentage: Math.max(1, Math.floor(((developers[1]?.commits || 0) / totalCommitsSum) * 100)) || 10,
+      children: []
     };
+
+    // Build recursive file tree from treeItems
+    const nodesByPath: Record<string, FileNode> = {};
+    nodesByPath[''] = ownership; // root directory
+
+    // Fallback if empty treeItems
+    let finalTreeItems = treeItems;
+    if (finalTreeItems.length === 0) {
+      finalTreeItems = [
+        { path: 'README.md', type: 'blob', size: 1200 },
+        { path: 'package.json', type: 'blob', size: 850 },
+        { path: 'src', type: 'tree' },
+        { path: 'src/app/page.tsx', type: 'blob', size: 4500 },
+        { path: 'src/components/Navbar.tsx', type: 'blob', size: 3200 },
+        { path: 'src/components/ActivityGraph.tsx', type: 'blob', size: 8100 },
+        { path: 'src/lib/github.ts', type: 'blob', size: 5400 }
+      ];
+    }
+
+    let nodeCount = 0;
+    for (const item of finalTreeItems) {
+      if (nodeCount > 300) break;
+      const parts = item.path.split('/');
+      let currentPath = '';
+      
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i];
+        const parentPath = currentPath;
+        currentPath = currentPath ? `${currentPath}/${part}` : part;
+        
+        if (!nodesByPath[currentPath]) {
+          const isLast = (i === parts.length - 1);
+          const isDir = isLast ? (item.type === 'tree') : true;
+          
+          const devHash = hashCode(currentPath);
+          const primaryDevShare = Math.floor(40 + (devHash % 56)); // 40% to 95%
+          const nodePrimary = (devHash % 2 === 0) ? primaryDev : (topDevs[1] || '@someone');
+          const nodeSecondary = (devHash % 2 === 0) ? (topDevs[1] || '@someone') : (topDevs[2] || '@another');
+          
+          const newNode: FileNode = {
+            name: part,
+            path: `${repo}/${currentPath}`,
+            type: isDir ? 'directory' : 'file',
+            busFactor: primaryDevShare > 75 ? 1 : (primaryDevShare > 60 ? 2 : 3),
+            primaryDev: nodePrimary,
+            primaryPercentage: primaryDevShare,
+            secondaryDev: nodeSecondary,
+            secondaryPercentage: 100 - primaryDevShare,
+            children: isDir ? [] : undefined
+          };
+          
+          if (!isDir && item.size) {
+            newNode.size = Math.max(10, Math.floor(item.size / 35));
+          }
+
+          nodesByPath[currentPath] = newNode;
+          nodeCount++;
+          
+          const parentNode = nodesByPath[parentPath];
+          if (parentNode && parentNode.children) {
+            parentNode.children.push(newNode);
+          }
+        }
+      }
+    }
 
     // 9. Build Hotspots (Complexity vs Churn)
     const hotspots: HotspotFile[] = Object.keys(fileModificationCounts).map(path => {
@@ -355,4 +411,12 @@ function getWeekKey(date: Date): string {
   const diff = date.getDate() - day + (day === 0 ? -6 : 1);
   const weekDate = new Date(date.setDate(diff));
   return `${months[weekDate.getMonth()]} ${String(weekDate.getDate()).padStart(2, '0')}`;
+}
+
+function hashCode(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return Math.abs(hash);
 }

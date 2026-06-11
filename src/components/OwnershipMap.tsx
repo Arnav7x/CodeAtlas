@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { FileNode } from '../lib/mockData';
-import { Folder, File, Users, ShieldAlert, ShieldCheck, ChevronRight, ChevronDown } from 'lucide-react';
+import { Folder, File, Users, ShieldAlert, ShieldCheck, ChevronRight, ChevronDown, Search, X } from 'lucide-react';
 
 interface OwnershipMapProps {
   ownershipData: FileNode;
@@ -13,6 +13,7 @@ export default function OwnershipMap({ ownershipData }: OwnershipMapProps) {
     [ownershipData.path]: true, // root expanded by default
     [`${ownershipData.path}/packages`]: true // standard subfolder preset expand
   });
+  const [searchQuery, setSearchQuery] = useState('');
 
   const toggleExpand = (path: string) => {
     setExpandedNodes(prev => ({
@@ -21,10 +22,30 @@ export default function OwnershipMap({ ownershipData }: OwnershipMapProps) {
     }));
   };
 
-  const renderNode = (node: FileNode, depth = 0) => {
+  const matchNode = (node: FileNode, query: string): boolean => {
+    if (!query) return true;
+    const cleanQuery = query.toLowerCase();
+    if (node.name.toLowerCase().includes(cleanQuery) || node.path.toLowerCase().includes(cleanQuery)) {
+      return true;
+    }
+    if (node.type === 'directory' && node.children) {
+      return node.children.some(child => matchNode(child, query));
+    }
+    return false;
+  };
+
+  const renderNode = (node: FileNode, depth = 0, parentMatched = false) => {
+    const cleanQuery = searchQuery.toLowerCase();
+    const selfMatches = searchQuery ? (node.name.toLowerCase().includes(cleanQuery) || node.path.toLowerCase().includes(cleanQuery)) : false;
+    const isVisible = !searchQuery || selfMatches || parentMatched || (node.type === 'directory' && node.children && node.children.some(child => matchNode(child, searchQuery)));
+
+    if (!isVisible) return null;
+
     const isDirectory = node.type === 'directory';
-    const isExpanded = !!expandedNodes[node.path];
+    const hasMatchingChildren = isDirectory && node.children && node.children.some(child => matchNode(child, searchQuery));
+    const isExpanded = searchQuery ? (hasMatchingChildren || !!expandedNodes[node.path]) : !!expandedNodes[node.path];
     const hasChildren = isDirectory && node.children && node.children.length > 0;
+    const passParentMatched = parentMatched || selfMatches;
     
     // Choose bus factor icons and warnings
     let riskColor = 'text-green';
@@ -103,7 +124,7 @@ export default function OwnershipMap({ ownershipData }: OwnershipMapProps) {
 
         {isDirectory && isExpanded && hasChildren && (
           <div className="tree-children">
-            {node.children!.map(child => renderNode(child, depth + 1))}
+            {node.children!.map(child => renderNode(child, depth + 1, passParentMatched))}
           </div>
         )}
       </div>
@@ -121,6 +142,28 @@ export default function OwnershipMap({ ownershipData }: OwnershipMapProps) {
       <p className="card-description">
         Drill down into directories to audit developers' contribution proportions. Higher bus factor indicates healthier knowledge redundancy. A Bus Factor of 1 represents a high-risk single point of dependency.
       </p>
+
+      <div className="search-filter-wrapper">
+        <div className="search-input-container">
+          <Search size={16} className="search-icon" />
+          <input 
+            type="text" 
+            placeholder="Filter by file path or name..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="search-input"
+          />
+          {searchQuery && (
+            <button 
+              className="clear-search-btn" 
+              onClick={() => setSearchQuery('')}
+              title="Clear search"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      </div>
 
       <div className="tree-container">
         <div className="tree-header">
@@ -323,6 +366,58 @@ export default function OwnershipMap({ ownershipData }: OwnershipMapProps) {
         .tree-children {
           border-left: 1px solid rgba(255, 255, 255, 0.04);
           margin-left: 20px;
+        }
+        .search-filter-wrapper {
+          display: flex;
+          margin-bottom: 12px;
+        }
+        .search-input-container {
+          position: relative;
+          display: flex;
+          align-items: center;
+          width: 100%;
+          max-width: 380px;
+          background: rgba(255, 255, 255, 0.02);
+          border: 1px solid var(--border-color);
+          border-radius: 6px;
+          padding: 6px 12px;
+          transition: all 0.2s ease;
+        }
+        .search-input-container:focus-within {
+          border-color: var(--accent-cyan);
+          box-shadow: 0 0 8px rgba(0, 210, 255, 0.15);
+          background: rgba(255, 255, 255, 0.04);
+        }
+        .search-icon {
+          color: var(--fg-tertiary);
+          margin-right: 8px;
+          display: inline-flex;
+          align-items: center;
+        }
+        .search-input {
+          background: transparent;
+          border: none;
+          color: var(--fg-primary);
+          font-size: 0.8rem;
+          width: 100%;
+          outline: none;
+        }
+        .search-input::placeholder {
+          color: var(--fg-tertiary);
+        }
+        .clear-search-btn {
+          background: transparent;
+          border: none;
+          color: var(--fg-tertiary);
+          cursor: pointer;
+          padding: 2px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: color 0.2s ease;
+        }
+        .clear-search-btn:hover {
+          color: var(--fg-primary);
         }
       `}</style>
     </div>
