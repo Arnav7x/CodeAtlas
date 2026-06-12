@@ -14,22 +14,24 @@ export default function Home() {
       <Navbar />
 
       <main className="landing-main">
-        
+
         {/* Core Hero Landing Space */}
         <section className="hero-section">
           <div className="hero-content">
             <h1 className="hero-headline roman-header">
-              Map Your Codebase. Understand Your <span className="gradient-text">Impact</span>.
+              Map Your <span className="gradient-text">Codebase</span>.
+              <br />
+              Understand Your <span className="gradient-text">Impact</span>.
             </h1>
             <p className="hero-tagline">
               Decode engineering activity, map developer ownership trees, and identify complex hotspots in seconds.
             </p>
           </div>
-          
+
           <div className="connector-section">
             <RepoConnector />
           </div>
-          
+
           {/* Real-time ticker metrics under CTA */}
           <div className="glowing-stats-ticker glass-card">
             <div className="ticker-item">
