@@ -35,17 +35,28 @@ export default function ActivityGraph({ activity, developers, connections }: Act
   const [draggedDevId, setDraggedDevId] = useState<string | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
 
-  // Keep positions updated if the developers list changes
+  // Keep positions & selection in sync when developers change
   useEffect(() => {
+    if (developers.length === 0) {
+      setDevPositions({});
+      setSelectedDev(null);
+      return;
+    }
     const pos: Record<string, { x: number; y: number }> = {};
     developers.forEach((dev, idx) => {
-      const angle = (idx / developers.length) * 2 * Math.PI - Math.PI / 2;
+      const angle = (idx / Math.max(developers.length, 1)) * 2 * Math.PI - Math.PI / 2;
       pos[dev.id] = {
         x: center.x + radius * Math.cos(angle),
-        y: center.y + radius * Math.sin(angle)
+        y: center.y + radius * Math.sin(angle),
       };
     });
     setDevPositions(pos);
+    setSelectedDev((prev) => {
+      if (prev && developers.some((d) => d.id === prev.id)) {
+        return developers.find((d) => d.id === prev.id) || developers[0];
+      }
+      return developers[0];
+    });
   }, [developers]);
 
   const handleMouseDown = (devId: string, e: React.MouseEvent) => {
@@ -92,15 +103,19 @@ export default function ActivityGraph({ activity, developers, connections }: Act
   // Calculate coordinates for Activity Chart
   const chartPoints = useMemo(() => {
     if (activity.length === 0) return [];
-    const maxVal = Math.max(...activity.map(a => Math.max(a.commits, a.prs))) || 10;
-    
-    const xStep = (chartWidth - chartPadding.left - chartPadding.right) / (activity.length - 1);
-    
+    const maxVal = Math.max(...activity.map((a) => Math.max(a.commits, a.prs)), 1);
+    const span = Math.max(activity.length - 1, 1);
+    const xStep = (chartWidth - chartPadding.left - chartPadding.right) / span;
+
     return activity.map((d, index) => {
-      const x = chartPadding.left + index * xStep;
-      // Invert Y since (0,0) is top-left in SVG
-      const yCommits = chartPadding.top + (1 - d.commits / maxVal) * (chartHeight - chartPadding.top - chartPadding.bottom);
-      const yPRs = chartPadding.top + (1 - d.prs / maxVal) * (chartHeight - chartPadding.top - chartPadding.bottom);
+      const x =
+        activity.length === 1
+          ? chartPadding.left + (chartWidth - chartPadding.left - chartPadding.right) / 2
+          : chartPadding.left + index * xStep;
+      const yCommits =
+        chartPadding.top + (1 - d.commits / maxVal) * (chartHeight - chartPadding.top - chartPadding.bottom);
+      const yPRs =
+        chartPadding.top + (1 - d.prs / maxVal) * (chartHeight - chartPadding.top - chartPadding.bottom);
       return { x, yCommits, yPRs, raw: d };
     });
   }, [activity, chartWidth, chartHeight]);
@@ -121,7 +136,9 @@ export default function ActivityGraph({ activity, developers, connections }: Act
     };
   }, [chartPoints, chartHeight]);
 
-  const maxValY = Math.max(...activity.map(a => Math.max(a.commits, a.prs))) || 10;
+  const maxValY = activity.length
+    ? Math.max(...activity.map((a) => Math.max(a.commits, a.prs)), 1)
+    : 10;
 
   return (
     <div className="dashboard-grid" style={{ marginBottom: '24px' }}>
@@ -280,9 +297,9 @@ export default function ActivityGraph({ activity, developers, connections }: Act
                 // Offset control point to create curvature
                 const dx = targetPos.x - sourcePos.x;
                 const dy = targetPos.y - sourcePos.y;
-                const len = Math.sqrt(dx*dx + dy*dy);
-                const ox = -dy / len * 15;
-                const oy = dx / len * 15;
+                const len = Math.sqrt(dx * dx + dy * dy) || 1;
+                const ox = (-dy / len) * 15;
+                const oy = (dx / len) * 15;
                 const cx = midX + ox;
                 const cy = midY + oy;
 
@@ -293,7 +310,7 @@ export default function ActivityGraph({ activity, developers, connections }: Act
                     fill="none"
                     stroke="var(--border-color)"
                     strokeWidth={Math.min(3, 1 + link.value / 10)}
-                    opacity="0.25"
+                    opacity="0.35"
                   />
                 );
               })}
@@ -308,9 +325,9 @@ export default function ActivityGraph({ activity, developers, connections }: Act
                 const midY = (sourcePos.y + targetPos.y) / 2;
                 const dx = targetPos.x - sourcePos.x;
                 const dy = targetPos.y - sourcePos.y;
-                const len = Math.sqrt(dx*dx + dy*dy);
-                const ox = -dy / len * 15;
-                const oy = dx / len * 15;
+                const len = Math.sqrt(dx * dx + dy * dy) || 1;
+                const ox = (-dy / len) * 15;
+                const oy = (dx / len) * 15;
                 const cx = midX + ox;
                 const cy = midY + oy;
 
@@ -336,7 +353,7 @@ export default function ActivityGraph({ activity, developers, connections }: Act
                 const isHovered = hoveredDev === dev.id;
                 const isRelated = activeLinks.some(l => l.source === dev.id || l.target === dev.id);
                 
-                let strokeColor = 'rgba(255,255,255,0.15)';
+                let strokeColor = 'var(--border-color)';
                 let glowFilter = '';
                 if (isSelected) {
                   strokeColor = 'var(--accent-cyan)';
@@ -561,8 +578,8 @@ export default function ActivityGraph({ activity, developers, connections }: Act
         }
         .dev-details-pane {
           flex: 1;
-          background: rgba(255, 255, 255, 0.02);
-          border-color: rgba(255, 255, 255, 0.05);
+          background: var(--bg-muted);
+          border-color: var(--border-color);
           padding: 16px;
           display: flex;
           flex-direction: column;
@@ -581,7 +598,8 @@ export default function ActivityGraph({ activity, developers, connections }: Act
           width: 36px;
           height: 36px;
           border-radius: 50%;
-          border: 1px solid rgba(255, 255, 255, 0.1);
+          border: 1px solid var(--border-color);
+          object-fit: cover;
         }
         .details-name {
           font-size: 0.85rem;

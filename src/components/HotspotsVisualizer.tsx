@@ -49,7 +49,7 @@ export default function HotspotsVisualizer({ hotspots }: HotspotsVisualizerProps
                 y1={padding.top + (plotHeight - padding.top - padding.bottom) / 2} 
                 x2={plotWidth - padding.right} 
                 y2={padding.top + (plotHeight - padding.top - padding.bottom) / 2} 
-                stroke="rgba(255, 255, 255, 0.08)" 
+                stroke="var(--border-color)" 
                 strokeDasharray="3 3"
               />
               <line 
@@ -57,7 +57,7 @@ export default function HotspotsVisualizer({ hotspots }: HotspotsVisualizerProps
                 y1={padding.top} 
                 x2={padding.left + (plotWidth - padding.left - padding.right) / 2} 
                 y2={plotHeight - padding.bottom} 
-                stroke="rgba(255, 255, 255, 0.08)" 
+                stroke="var(--border-color)" 
                 strokeDasharray="3 3"
               />
 
@@ -151,6 +151,9 @@ export default function HotspotsVisualizer({ hotspots }: HotspotsVisualizerProps
         </div>
         
         <div className="candidates-list">
+          {hotspots.length === 0 && (
+            <p className="empty-hotspots">No hotspot candidates from recent commits yet.</p>
+          )}
           {hotspots.map((file, idx) => {
             let statusIcon = <CheckCircle2 size={14} className="icon-green" />;
             let statusClass = 'status-stable';
@@ -292,13 +295,19 @@ export default function HotspotsVisualizer({ hotspots }: HotspotsVisualizerProps
           overflow-y: auto;
           padding-right: 4px;
         }
+        .empty-hotspots {
+          font-size: 0.8rem;
+          color: var(--fg-tertiary);
+          padding: 16px 8px;
+          text-align: center;
+        }
         .candidate-row {
           display: flex;
           justify-content: space-between;
           align-items: center;
           padding: 8px 12px;
           border: 1px solid var(--border-color);
-          background: rgba(255, 255, 255, 0.01);
+          background: var(--bg-muted);
           border-radius: 8px;
           gap: 12px;
         }

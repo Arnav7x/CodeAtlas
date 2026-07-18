@@ -1,15 +1,48 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, Play, ArrowRight, Sparkles, Loader2, GitCommit, Users, FileCode } from 'lucide-react';
 
-const Github = ({ size = 24, ...props }: React.SVGProps<SVGSVGElement> & { size?: number | string }) => (
-  <svg viewBox="0 0 24 24" width={size} height={size} stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }} {...props}>
+const GithubIcon = ({ size = 24, ...props }: React.SVGProps<SVGSVGElement> & { size?: number | string }) => (
+  <svg
+    viewBox="0 0 24 24"
+    width={size}
+    height={size}
+    stroke="currentColor"
+    strokeWidth="2"
+    fill="none"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    style={{ display: 'inline-block', verticalAlign: 'middle' }}
+    {...props}
+  >
     <path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4" />
     <path d="M9 18c-4.51 2-5-2-7-2" />
   </svg>
 );
+
+const PRESET_SLUGS = new Set(['facebook/react', 'vercel/next.js']);
+
+function parseRepoSlug(raw: string): { owner: string; repo: string } | null {
+  let clean = raw.trim().replace(/\/+$/, '');
+  if (!clean) return null;
+
+  if (clean.includes('github.com/')) {
+    const parts = clean.split('github.com/');
+    if (parts[1]) {
+      clean = parts[1].replace(/\.git$/, '').split(/[?#]/)[0].split('/').slice(0, 2).join('/');
+    }
+  }
+
+  // Support owner/repo only
+  const segments = clean.split('/').filter(Boolean);
+  if (segments.length < 2) return null;
+  const owner = segments[0];
+  const repo = segments[1];
+  if (!owner || !repo || owner.includes(' ') || repo.includes(' ')) return null;
+  return { owner, repo };
+}
 
 export default function RepoConnector() {
   const router = useRouter();
@@ -19,60 +52,48 @@ export default function RepoConnector() {
   const [error, setError] = useState('');
 
   const loadingSteps = [
-    { title: 'Connecting to GitHub API...', icon: <Github size={16} className="icon-cyan" /> },
-    { title: 'Parsing git commits & history...', icon: <GitCommit size={16} className="icon-green" /> },
-    { title: 'Mapping contributor collaboration network...', icon: <Users size={16} className="icon-purple" /> },
-    { title: 'Analyzing directory structures & ownership...', icon: <FileCode size={16} className="icon-orange" /> },
-    { title: 'Generating AI engineering insights...', icon: <Sparkles size={16} className="icon-cyan animate-pulse" /> }
+    { title: 'Connecting to GitHub…', icon: <GithubIcon size={16} className="icon-cyan" /> },
+    { title: 'Parsing commits & history…', icon: <GitCommit size={16} className="icon-green" /> },
+    { title: 'Mapping collaboration network…', icon: <Users size={16} className="icon-purple" /> },
+    { title: 'Analyzing ownership structure…', icon: <FileCode size={16} className="icon-orange" /> },
+    { title: 'Generating engineering insights…', icon: <Sparkles size={16} className="icon-cyan" /> },
   ];
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isLoading) {
-      interval = setInterval(() => {
-        setLoadingStep((prev) => {
-          if (prev >= loadingSteps.length - 1) {
-            clearInterval(interval);
-            return prev;
-          }
-          return prev + 1;
-        });
-      }, 1200);
-    }
+    if (!isLoading) return;
+    const interval = setInterval(() => {
+      setLoadingStep((prev) => (prev >= loadingSteps.length - 1 ? prev : prev + 1));
+    }, 550);
     return () => clearInterval(interval);
-  }, [isLoading]);
+  }, [isLoading, loadingSteps.length]);
+
+  const handleConnect = useCallback(
+    (slug: string) => {
+      setError('');
+      const parsed = parseRepoSlug(slug);
+      if (!parsed) {
+        setError('Enter a valid owner/repo slug or GitHub URL (e.g. facebook/react).');
+        return;
+      }
+
+      const full = `${parsed.owner}/${parsed.repo}`;
+      const isPreset = PRESET_SLUGS.has(full.toLowerCase());
+
+      setIsLoading(true);
+      setLoadingStep(0);
+
+      // Presets are local mock data — shorter wait. Live API needs a beat for perceived progress.
+      const delay = isPreset ? 1400 : 2800;
+      window.setTimeout(() => {
+        router.push(`/dashboard/${encodeURIComponent(parsed.owner)}/${encodeURIComponent(parsed.repo)}`);
+      }, delay);
+    },
+    [router]
+  );
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     handleConnect(repoInput);
-  };
-
-  const handleConnect = (slug: string) => {
-    if (!slug) return;
-    setError('');
-    
-    // Parse GitHub URL or slug
-    let cleanSlug = slug.trim();
-    if (cleanSlug.includes('github.com/')) {
-      const parts = cleanSlug.split('github.com/');
-      if (parts[1]) {
-        cleanSlug = parts[1].replace(/\.git$/, '').split('/').slice(0, 2).join('/');
-      }
-    }
-    
-    const parts = cleanSlug.split('/');
-    if (parts.length !== 2 || !parts[0] || !parts[1]) {
-      setError('Please enter a valid slug (owner/repo) or a GitHub repository link.');
-      return;
-    }
-
-    setIsLoading(true);
-    setLoadingStep(0);
-
-    // Simulate analysis delay
-    setTimeout(() => {
-      router.push(`/dashboard/${parts[0]}/${parts[1]}`);
-    }, 6000);
   };
 
   if (isLoading) {
@@ -80,15 +101,19 @@ export default function RepoConnector() {
       <div className="loader-overlay glass-panel animate-fade-in">
         <div className="loader-content">
           <div className="loader-spinner-wrapper">
-            <Loader2 className="spinner" size={48} />
-            <div className="pulse-circle"></div>
+            <Loader2 className="spinner" size={40} />
           </div>
-          
-          <h2 className="loader-title">Analyzing Codebase</h2>
-          <p className="loader-subtitle">Mapping contribution velocity, ownership distributions, and hotspot files.</p>
-          
-          <div className="progress-container">
-            <div className="progress-bar" style={{ width: `${((loadingStep + 1) / loadingSteps.length) * 100}%` }}></div>
+
+          <h2 className="loader-title roman-header">Analyzing codebase</h2>
+          <p className="loader-subtitle">
+            Mapping contribution velocity, ownership, and hotspot files.
+          </p>
+
+          <div className="progress-container" role="progressbar" aria-valuenow={loadingStep + 1} aria-valuemin={1} aria-valuemax={loadingSteps.length}>
+            <div
+              className="progress-bar"
+              style={{ width: `${((loadingStep + 1) / loadingSteps.length) * 100}%` }}
+            />
           </div>
 
           <div className="steps-list">
@@ -100,11 +125,7 @@ export default function RepoConnector() {
               return (
                 <div key={idx} className={`step-item ${statusClass}`}>
                   <div className="step-icon-container">
-                    {idx < loadingStep ? (
-                      <span className="step-checkmark">✓</span>
-                    ) : (
-                      step.icon
-                    )}
+                    {idx < loadingStep ? <span className="step-checkmark">✓</span> : step.icon}
                   </div>
                   <span className="step-title">{step.title}</span>
                 </div>
@@ -115,9 +136,9 @@ export default function RepoConnector() {
 
         <style jsx>{`
           .loader-overlay {
-            max-width: 600px;
-            margin: 80px auto;
-            padding: 40px;
+            max-width: 520px;
+            margin: 0 auto;
+            padding: 36px 32px;
             text-align: center;
           }
           .loader-content {
@@ -126,109 +147,88 @@ export default function RepoConnector() {
             align-items: center;
           }
           .loader-spinner-wrapper {
-            position: relative;
-            margin-bottom: 24px;
+            margin-bottom: 20px;
           }
           .spinner {
-            animation: spin 1.5s linear infinite;
+            animation: spin 1.2s linear infinite;
             color: var(--accent-cyan);
-            filter: drop-shadow(0 0 8px var(--accent-cyan));
           }
           @keyframes spin {
             from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
           }
-          .pulse-circle {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 72px;
-            height: 72px;
-            border-radius: 50%;
-            border: 1px solid rgba(0, 210, 255, 0.2);
-            animation: pulse-ring 2s infinite ease-in-out;
-            pointer-events: none;
-            z-index: -1;
-          }
           .loader-title {
-            font-size: 1.6rem;
-            font-weight: 700;
-            margin-bottom: 8px;
-            letter-spacing: -0.02em;
+            font-size: 1.45rem;
+            margin-bottom: 6px;
           }
           .loader-subtitle {
-            font-size: 0.9rem;
+            font-size: 0.88rem;
             color: var(--fg-secondary);
-            margin-bottom: 32px;
-            max-width: 420px;
+            margin-bottom: 28px;
+            max-width: 380px;
           }
           .progress-container {
             width: 100%;
-            height: 4px;
-            background: rgba(255, 255, 255, 0.05);
+            height: 3px;
+            background: var(--bg-muted);
             border-radius: 99px;
             overflow: hidden;
-            margin-bottom: 32px;
+            margin-bottom: 24px;
           }
           .progress-bar {
             height: 100%;
-            background: linear-gradient(90deg, var(--accent-cyan), var(--accent-green));
-            box-shadow: 0 0 10px var(--accent-green);
-            transition: width 0.4s ease-out;
+            background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+            transition: width 0.35s ease-out;
           }
           .steps-list {
             width: 100%;
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 8px;
             text-align: left;
           }
           .step-item {
             display: flex;
             align-items: center;
             gap: 12px;
-            padding: 10px 14px;
+            padding: 9px 12px;
             border-radius: 8px;
-            transition: all 0.3s ease;
+            transition: all 0.25s ease;
           }
           .step-pending {
             opacity: 0.4;
-            background: transparent;
           }
           .step-active {
             opacity: 1;
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.05);
+            background: var(--bg-muted);
+            border: 1px solid var(--border-subtle);
           }
           .step-completed {
-            opacity: 0.85;
+            opacity: 0.8;
             color: var(--fg-secondary);
           }
           .step-icon-container {
             width: 24px;
             height: 24px;
             border-radius: 50%;
-            background: rgba(255, 255, 255, 0.04);
+            background: var(--bg-muted);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: 700;
+            flex-shrink: 0;
           }
           .step-completed .step-icon-container {
-            background: rgba(0, 245, 160, 0.1);
-            border: 1px solid rgba(0, 245, 160, 0.3);
+            background: rgba(16, 185, 129, 0.12);
+            border: 1px solid rgba(16, 185, 129, 0.28);
           }
           .step-checkmark {
             color: var(--accent-green);
-            font-size: 0.8rem;
+            font-size: 0.75rem;
+            font-weight: 700;
           }
           .step-title {
-            font-size: 0.85rem;
+            font-size: 0.84rem;
             font-weight: 500;
-          }
-          .step-active .step-title {
-            color: var(--fg-primary);
           }
         `}</style>
       </div>
@@ -239,12 +239,12 @@ export default function RepoConnector() {
     <div className="connector-card glass-panel animate-fade-in">
       <div className="card-header">
         <div className="brand-pill">
-          <Sparkles size={12} className="icon-cyan" />
-          <span>GitHub Activity Intelligence</span>
+          <Sparkles size={12} />
+          <span>GitHub activity intelligence</span>
         </div>
-        <h1 className="header-title">Codebase Analytics Made Visual</h1>
+        <h2 className="header-title roman-header">Analyze any repository</h2>
         <p className="header-desc">
-          Connect any public GitHub repository to map code ownership, identify complexity hotspots, and generate AI insights in seconds.
+          Map ownership, collaboration, and complexity hotspots from public Git history — or use a showcase demo.
         </p>
       </div>
 
@@ -254,26 +254,33 @@ export default function RepoConnector() {
           <input
             type="text"
             className="glass-input search-input"
-            placeholder="e.g. facebook/react or vercel/next.js"
+            placeholder="owner/repo or github.com/owner/repo"
             value={repoInput}
             onChange={(e) => setRepoInput(e.target.value)}
+            aria-label="Repository slug or URL"
+            autoComplete="off"
+            spellCheck={false}
           />
-          <button type="submit" className="btn btn-primary search-btn">
+          <button type="submit" className="btn btn-primary search-btn" disabled={!repoInput.trim()}>
             <span>Analyze</span>
-            <ArrowRight size={16} />
+            <ArrowRight size={15} />
           </button>
         </div>
-        {error && <p className="error-message">{error}</p>}
+        {error && (
+          <p className="error-message" role="alert">
+            {error}
+          </p>
+        )}
       </form>
 
       <div className="divider">
-        <span>or select a preset showcase repo</span>
+        <span>or try a showcase</span>
       </div>
 
       <div className="presets-grid">
-        <div className="preset-card glass-card" onClick={() => handleConnect('facebook/react')}>
+        <button type="button" className="preset-card glass-card glass-card-interactive" onClick={() => handleConnect('facebook/react')}>
           <div className="preset-meta">
-            <Github size={20} className="icon-cyan" />
+            <GithubIcon size={20} className="icon-cyan" />
             <div>
               <h4 className="preset-name">React</h4>
               <p className="preset-slug">facebook/react</p>
@@ -281,18 +288,18 @@ export default function RepoConnector() {
           </div>
           <div className="preset-specs">
             <span>15k+ commits</span>
-            <span>•</span>
+            <span aria-hidden>•</span>
             <span>184 devs</span>
           </div>
           <div className="preset-action">
-            <span>Explore Demo</span>
+            <span>Explore demo</span>
             <Play size={12} fill="currentColor" />
           </div>
-        </div>
+        </button>
 
-        <div className="preset-card glass-card" onClick={() => handleConnect('vercel/next.js')}>
+        <button type="button" className="preset-card glass-card glass-card-interactive" onClick={() => handleConnect('vercel/next.js')}>
           <div className="preset-meta">
-            <Github size={20} className="icon-green" />
+            <GithubIcon size={20} className="icon-orange" />
             <div>
               <h4 className="preset-name">Next.js</h4>
               <p className="preset-slug">vercel/next.js</p>
@@ -300,73 +307,59 @@ export default function RepoConnector() {
           </div>
           <div className="preset-specs">
             <span>22k+ commits</span>
-            <span>•</span>
+            <span aria-hidden>•</span>
             <span>320 devs</span>
           </div>
           <div className="preset-action">
-            <span>Explore Demo</span>
+            <span>Explore demo</span>
             <Play size={12} fill="currentColor" />
           </div>
-        </div>
+        </button>
       </div>
 
       <style jsx>{`
         .connector-card {
-          max-width: 680px;
-          margin: 60px auto;
-          padding: 48px;
+          max-width: 640px;
+          margin: 0 auto;
+          padding: 36px 32px;
           position: relative;
           overflow: hidden;
         }
-        .connector-card::before {
-          content: '';
-          position: absolute;
-          top: -50%;
-          left: -50%;
-          width: 200%;
-          height: 200%;
-          background: radial-gradient(circle at 50% 50%, rgba(0, 210, 255, 0.03), transparent 50%);
-          pointer-events: none;
-          z-index: -1;
-        }
         .card-header {
           text-align: center;
-          margin-bottom: 36px;
+          margin-bottom: 28px;
         }
         .brand-pill {
           display: inline-flex;
           align-items: center;
           gap: 6px;
-          background: rgba(0, 210, 255, 0.08);
-          border: 1px solid rgba(0, 210, 255, 0.15);
-          padding: 4px 10px;
+          background: var(--accent-soft);
+          border: 1px solid var(--accent-soft-border);
+          padding: 4px 11px;
           border-radius: 99px;
-          font-size: 0.75rem;
+          font-size: 0.7rem;
           font-weight: 600;
-          color: var(--accent-cyan);
+          color: var(--accent-primary);
           text-transform: uppercase;
-          letter-spacing: 0.05em;
-          margin-bottom: 16px;
+          letter-spacing: 0.04em;
+          margin-bottom: 14px;
         }
         .header-title {
-          font-size: 2.2rem;
-          font-weight: 800;
-          line-height: 1.2;
-          letter-spacing: -0.03em;
-          margin-bottom: 12px;
-          background: linear-gradient(135deg, var(--fg-primary) 30%, var(--fg-secondary));
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
+          font-size: 1.65rem;
+          line-height: 1.25;
+          letter-spacing: -0.02em;
+          margin-bottom: 10px;
+          color: var(--fg-primary);
         }
         .header-desc {
           color: var(--fg-secondary);
-          font-size: 0.95rem;
-          line-height: 1.5;
-          max-width: 520px;
+          font-size: 0.92rem;
+          line-height: 1.55;
+          max-width: 460px;
           margin: 0 auto;
         }
         .input-form {
-          margin-bottom: 32px;
+          margin-bottom: 24px;
         }
         .search-input-wrapper {
           display: flex;
@@ -375,28 +368,30 @@ export default function RepoConnector() {
         }
         .search-icon {
           position: absolute;
-          left: 16px;
+          left: 14px;
           color: var(--fg-tertiary);
           pointer-events: none;
+          z-index: 1;
         }
         .search-input {
           width: 100%;
-          padding: 14px 14px 14px 48px;
-          font-size: 0.95rem;
+          padding: 13px 118px 13px 44px;
+          font-size: 0.92rem;
           border-radius: 10px;
+          font-family: var(--font-mono);
         }
         .search-btn {
           position: absolute;
-          right: 6px;
-          top: 6px;
-          bottom: 6px;
-          padding: 0 16px;
-          font-size: 0.85rem;
-          border-radius: 6px;
+          right: 5px;
+          top: 5px;
+          bottom: 5px;
+          padding: 0 14px;
+          font-size: 0.82rem;
+          border-radius: 7px;
         }
         .error-message {
           color: var(--accent-red);
-          font-size: 0.8rem;
+          font-size: 0.78rem;
           margin-top: 8px;
           text-align: left;
           padding-left: 4px;
@@ -405,39 +400,40 @@ export default function RepoConnector() {
           display: flex;
           align-items: center;
           text-align: center;
-          margin: 24px 0;
+          margin: 20px 0;
           color: var(--fg-tertiary);
-          font-size: 0.75rem;
+          font-size: 0.7rem;
           text-transform: uppercase;
           letter-spacing: 0.05em;
         }
-        .divider::before, .divider::after {
+        .divider::before,
+        .divider::after {
           content: '';
           flex: 1;
           border-bottom: 1px solid var(--border-color);
         }
-        .divider::before {
-          margin-right: 12px;
-        }
-        .divider::after {
-          margin-left: 12px;
-        }
+        .divider::before { margin-right: 12px; }
+        .divider::after { margin-left: 12px; }
         .presets-grid {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 16px;
+          gap: 12px;
         }
-        @media (max-width: 600px) {
-          .presets-grid {
-            grid-template-columns: 1fr;
-          }
+        @media (max-width: 560px) {
+          .presets-grid { grid-template-columns: 1fr; }
+          .connector-card { padding: 28px 20px; }
+          .search-input { padding-right: 100px; }
         }
         .preset-card {
-          padding: 20px;
+          padding: 16px;
           display: flex;
           flex-direction: column;
-          gap: 12px;
+          gap: 10px;
           cursor: pointer;
+          text-align: left;
+          font: inherit;
+          color: inherit;
+          width: 100%;
         }
         .preset-meta {
           display: flex;
@@ -445,16 +441,17 @@ export default function RepoConnector() {
           gap: 12px;
         }
         .preset-name {
-          font-size: 0.95rem;
+          font-size: 0.92rem;
           font-weight: 600;
+          font-family: var(--font-sans);
         }
         .preset-slug {
-          font-size: 0.75rem;
+          font-size: 0.72rem;
           color: var(--fg-tertiary);
           font-family: var(--font-mono);
         }
         .preset-specs {
-          font-size: 0.8rem;
+          font-size: 0.78rem;
           color: var(--fg-secondary);
           display: flex;
           gap: 6px;
@@ -463,15 +460,15 @@ export default function RepoConnector() {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          font-size: 0.8rem;
+          font-size: 0.78rem;
           font-weight: 600;
-          color: var(--accent-cyan);
-          border-top: 1px solid rgba(255, 255, 255, 0.04);
+          color: var(--accent-primary);
+          border-top: 1px solid var(--border-subtle);
           padding-top: 10px;
           margin-top: auto;
         }
         .preset-card:hover .preset-action {
-          color: var(--accent-green);
+          color: var(--accent-secondary);
         }
       `}</style>
     </div>

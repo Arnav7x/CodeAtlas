@@ -20,23 +20,28 @@ export default function InsightsFeed({ insights }: InsightsFeedProps) {
       <div className="insights-feed">
         {insights.map((insight) => {
           let cardBorderClass = 'border-info';
-          let icon = <CheckCircle2 size={16} className="icon-cyan" fill="currentColor" />;
-          let categoryBg = 'rgba(0, 210, 255, 0.08)';
-          let categoryColor = 'var(--accent-cyan)';
+          let icon = <CheckCircle2 size={16} className="icon-green" />;
+          let categoryBg = 'var(--accent-soft)';
+          let categoryColor = 'var(--accent-primary)';
 
           if (insight.type === 'danger') {
             cardBorderClass = 'border-danger';
-            icon = <ShieldAlert size={16} className="icon-red animate-pulse" />;
-            categoryBg = 'rgba(255, 77, 77, 0.08)';
+            icon = <ShieldAlert size={16} className="icon-red" />;
+            categoryBg = 'rgba(239, 68, 68, 0.1)';
             categoryColor = 'var(--accent-red)';
           } else if (insight.type === 'warning') {
             cardBorderClass = 'border-warning';
             icon = <AlertTriangle size={16} className="icon-orange" />;
-            categoryBg = 'rgba(255, 159, 67, 0.08)';
+            categoryBg = 'rgba(255, 138, 0, 0.1)';
             categoryColor = 'var(--accent-orange)';
           } else if (insight.type === 'info') {
             cardBorderClass = 'border-info';
             icon = <Zap size={16} className="icon-cyan" />;
+          } else if (insight.type === 'success') {
+            cardBorderClass = 'border-success';
+            icon = <CheckCircle2 size={16} className="icon-green" />;
+            categoryBg = 'rgba(16, 185, 129, 0.1)';
+            categoryColor = 'var(--accent-green)';
           }
 
           return (
@@ -93,9 +98,9 @@ export default function InsightsFeed({ insights }: InsightsFeedProps) {
           font-weight: 600;
           text-transform: uppercase;
           letter-spacing: 0.05em;
-          color: var(--accent-cyan);
-          background: rgba(0, 210, 255, 0.08);
-          border: 1px solid rgba(0, 210, 255, 0.15);
+          color: var(--accent-primary);
+          background: var(--accent-soft);
+          border: 1px solid var(--accent-soft-border);
           padding: 2px 6px;
           border-radius: 4px;
           margin-left: 6px;
@@ -103,7 +108,7 @@ export default function InsightsFeed({ insights }: InsightsFeedProps) {
         .insights-feed {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
-          gap: 16px;
+          gap: 14px;
         }
         @media (max-width: 1024px) {
           .insights-feed {
@@ -111,27 +116,31 @@ export default function InsightsFeed({ insights }: InsightsFeedProps) {
           }
         }
         .insight-row {
-          padding: 20px;
+          padding: 18px;
           display: flex;
           flex-direction: column;
-          gap: 14px;
+          gap: 12px;
           border-left: 3px solid transparent;
         }
         .insight-row:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.5);
+          transform: translateY(-1px);
+          box-shadow: var(--shadow-md);
         }
         .border-danger {
           border-left-color: var(--accent-red);
-          border-color: rgba(255, 77, 77, 0.12);
+          border-color: rgba(239, 68, 68, 0.14);
         }
         .border-warning {
           border-left-color: var(--accent-orange);
-          border-color: rgba(255, 159, 67, 0.12);
+          border-color: rgba(255, 138, 0, 0.16);
         }
         .border-info {
-          border-left-color: var(--accent-cyan);
-          border-color: rgba(0, 210, 255, 0.12);
+          border-left-color: var(--accent-primary);
+          border-color: var(--accent-soft-border);
+        }
+        .border-success {
+          border-left-color: var(--accent-green);
+          border-color: rgba(16, 185, 129, 0.18);
         }
         .insight-meta {
           display: flex;
@@ -155,7 +164,7 @@ export default function InsightsFeed({ insights }: InsightsFeedProps) {
           font-size: 0.7rem;
           font-weight: 600;
           color: var(--fg-secondary);
-          background: rgba(255, 255, 255, 0.04);
+          background: var(--bg-muted);
           padding: 2px 6px;
           border-radius: 4px;
           border: 1px solid var(--border-color);
@@ -180,8 +189,8 @@ export default function InsightsFeed({ insights }: InsightsFeedProps) {
           display: flex;
           flex-direction: column;
           gap: 4px;
-          background: rgba(255, 255, 255, 0.015);
-          border: 1px solid rgba(255, 255, 255, 0.03);
+          background: var(--bg-muted);
+          border: 1px solid var(--border-subtle);
           border-radius: 6px;
           padding: 10px;
           font-size: 0.72rem;

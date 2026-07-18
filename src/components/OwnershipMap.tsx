@@ -200,9 +200,9 @@ export default function OwnershipMap({ ownershipData }: OwnershipMapProps) {
           font-weight: 600;
           text-transform: uppercase;
           letter-spacing: 0.05em;
-          color: var(--accent-cyan);
-          background: rgba(0, 210, 255, 0.08);
-          border: 1px solid rgba(0, 210, 255, 0.15);
+          color: var(--accent-primary);
+          background: var(--accent-soft);
+          border: 1px solid var(--accent-soft-border);
           padding: 2px 6px;
           border-radius: 4px;
           margin-left: 6px;
@@ -216,7 +216,7 @@ export default function OwnershipMap({ ownershipData }: OwnershipMapProps) {
         .tree-container {
           border: 1px solid var(--border-color);
           border-radius: 8px;
-          background: rgba(255, 255, 255, 0.01);
+          background: var(--bg-muted);
           overflow: hidden;
         }
         .tree-header {
@@ -224,7 +224,7 @@ export default function OwnershipMap({ ownershipData }: OwnershipMapProps) {
           justify-content: space-between;
           padding: 10px 16px;
           border-bottom: 1px solid var(--border-color);
-          background: rgba(255, 255, 255, 0.02);
+          background: var(--bg-muted);
           font-size: 0.75rem;
           font-weight: 600;
           color: var(--fg-tertiary);
@@ -249,12 +249,14 @@ export default function OwnershipMap({ ownershipData }: OwnershipMapProps) {
           align-items: center;
           padding: 8px 16px;
           border: none;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+          border-bottom: 1px solid var(--border-subtle);
           border-radius: 0;
           background: transparent;
+          gap: 12px;
+          flex-wrap: wrap;
         }
         .tree-node:hover {
-          background: rgba(255, 255, 255, 0.02);
+          background: var(--bg-muted-hover);
           transform: none;
           box-shadow: none;
         }
@@ -292,24 +294,25 @@ export default function OwnershipMap({ ownershipData }: OwnershipMapProps) {
         .node-size {
           font-size: 0.7rem;
           color: var(--fg-tertiary);
-          background: rgba(255, 255, 255, 0.03);
+          background: var(--bg-muted);
           padding: 1px 4px;
           border-radius: 3px;
         }
         .node-metrics {
           display: flex;
           align-items: center;
-          gap: 20px;
+          gap: 16px;
+          flex-shrink: 0;
         }
         .bus-factor-badge {
           display: flex;
           align-items: center;
           gap: 6px;
-          font-size: 0.75rem;
+          font-size: 0.72rem;
           font-weight: 600;
           padding: 4px 10px;
           border-radius: 6px;
-          width: 120px;
+          min-width: 112px;
         }
         .text-green { color: var(--accent-green); }
         .icon-green { color: var(--accent-green); }
@@ -327,7 +330,7 @@ export default function OwnershipMap({ ownershipData }: OwnershipMapProps) {
         .owners-bar {
           display: flex;
           height: 6px;
-          background: rgba(255, 255, 255, 0.04);
+          background: var(--bg-tertiary);
           border-radius: 99px;
           overflow: hidden;
           width: 100%;
@@ -336,12 +339,10 @@ export default function OwnershipMap({ ownershipData }: OwnershipMapProps) {
           height: 100%;
         }
         .primary-seg {
-          background-color: var(--accent-cyan);
-          box-shadow: 0 0 8px rgba(0, 210, 255, 0.2);
+          background-color: var(--accent-primary);
         }
         .secondary-seg {
           background-color: var(--accent-purple);
-          box-shadow: 0 0 8px rgba(171, 112, 255, 0.2);
         }
         .owners-text {
           display: flex;
@@ -364,7 +365,7 @@ export default function OwnershipMap({ ownershipData }: OwnershipMapProps) {
           font-family: var(--font-mono);
         }
         .tree-children {
-          border-left: 1px solid rgba(255, 255, 255, 0.04);
+          border-left: 1px solid var(--border-subtle);
           margin-left: 20px;
         }
         .search-filter-wrapper {
@@ -377,16 +378,16 @@ export default function OwnershipMap({ ownershipData }: OwnershipMapProps) {
           align-items: center;
           width: 100%;
           max-width: 380px;
-          background: rgba(255, 255, 255, 0.02);
+          background: var(--bg-muted);
           border: 1px solid var(--border-color);
-          border-radius: 6px;
+          border-radius: 8px;
           padding: 6px 12px;
           transition: all 0.2s ease;
         }
         .search-input-container:focus-within {
-          border-color: var(--accent-cyan);
-          box-shadow: 0 0 8px rgba(0, 210, 255, 0.15);
-          background: rgba(255, 255, 255, 0.04);
+          border-color: var(--border-focus);
+          box-shadow: 0 0 0 3px rgba(255, 69, 48, 0.1);
+          background: var(--bg-elevated);
         }
         .search-icon {
           color: var(--fg-tertiary);

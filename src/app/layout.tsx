@@ -19,8 +19,9 @@ const cormorantSerif = Cormorant_Garamond({
 });
 
 export const metadata: Metadata = {
-  title: "CodeAtlas — GitHub Activity Intelligence Platform",
-  description: "Transform raw Git commits, pull requests, and issues into visual engineering impact metrics, knowledge redundancy mapping, and technical debt hotspots.",
+  title: "CodeAtlas — GitHub Activity Intelligence",
+  description:
+    "Transform Git commits, pull requests, and issues into visual engineering metrics, knowledge maps, and technical debt hotspots.",
 };
 
 export default function RootLayout({
@@ -31,9 +32,18 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${cormorantSerif.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${cormorantSerif.variable}`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <head>
+        {/* Prevent theme flash before React hydrates */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('theme');var d=document.documentElement;if(t==='dark'){d.classList.add('dark-theme');}else if(t==='light'){d.classList.remove('dark-theme');}else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){d.classList.add('dark-theme');}}catch(e){}})();`,
+          }}
+        />
+      </head>
+      <body suppressHydrationWarning>{children}</body>
     </html>
   );
 }

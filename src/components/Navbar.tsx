@@ -1,11 +1,25 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { GitBranch, Settings, Key, Check, AlertCircle, Home, Sun, Moon } from 'lucide-react';
+import { GitBranch, Settings, Key, Check, Home, Sun, Moon } from 'lucide-react';
 
 interface NavbarProps {
   currentRepo?: string;
+}
+
+function applyTheme(dark: boolean) {
+  const root = document.documentElement;
+  const body = document.body;
+  if (dark) {
+    root.classList.add('dark-theme');
+    body.classList.add('dark-theme');
+    localStorage.setItem('theme', 'dark');
+  } else {
+    root.classList.remove('dark-theme');
+    body.classList.remove('dark-theme');
+    localStorage.setItem('theme', 'light');
+  }
 }
 
 export default function Navbar({ currentRepo }: NavbarProps) {
@@ -13,41 +27,56 @@ export default function Navbar({ currentRepo }: NavbarProps) {
   const [token, setToken] = useState('');
   const [isSaved, setIsSaved] = useState(false);
   const [isDarkTheme, setIsDarkTheme] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const settingsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    setMounted(true);
     const savedToken = localStorage.getItem('github_pat') || '';
     setToken(savedToken);
 
-    // Initial theme set
     const savedTheme = localStorage.getItem('theme');
-    if (savedTheme === 'dark') {
-      setIsDarkTheme(true);
-      document.body.classList.add('dark-theme');
-    } else {
-      setIsDarkTheme(false);
-      document.body.classList.remove('dark-theme');
-    }
+    const prefersDark =
+      savedTheme === 'dark' ||
+      (!savedTheme && window.matchMedia?.('(prefers-color-scheme: dark)').matches) ||
+      document.documentElement.classList.contains('dark-theme');
+
+    setIsDarkTheme(!!prefersDark);
+    applyTheme(!!prefersDark);
   }, []);
 
+  // Close settings when clicking outside
+  useEffect(() => {
+    if (!showSettings) return;
+    const onPointer = (e: MouseEvent) => {
+      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
+        setShowSettings(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowSettings(false);
+    };
+    document.addEventListener('mousedown', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onPointer);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [showSettings]);
+
   const toggleTheme = () => {
-    if (isDarkTheme) {
-      document.body.classList.remove('dark-theme');
-      localStorage.setItem('theme', 'light');
-      setIsDarkTheme(false);
-    } else {
-      document.body.classList.add('dark-theme');
-      localStorage.setItem('theme', 'dark');
-      setIsDarkTheme(true);
-    }
+    const next = !isDarkTheme;
+    applyTheme(next);
+    setIsDarkTheme(next);
   };
 
   const handleSaveToken = () => {
-    localStorage.setItem('github_pat', token);
+    localStorage.setItem('github_pat', token.trim());
     setIsSaved(true);
     setTimeout(() => {
       setIsSaved(false);
       setShowSettings(false);
-    }, 1500);
+    }, 1200);
   };
 
   const handleClearToken = () => {
@@ -57,15 +86,15 @@ export default function Navbar({ currentRepo }: NavbarProps) {
     setTimeout(() => {
       setIsSaved(false);
       setShowSettings(false);
-    }, 1500);
+    }, 1200);
   };
 
   return (
     <header className="navbar-container">
       <div className="navbar-inner">
-        <Link href="/" className="logo-group">
+        <Link href="/" className="logo-group" aria-label="CodeAtlas home">
           <div className="logo-icon">
-            <GitBranch className="icon-glow" size={20} />
+            <GitBranch className="icon-glow" size={18} />
           </div>
           <span className="logo-text">
             Code<span className="gradient-text">Atlas</span>
@@ -73,66 +102,79 @@ export default function Navbar({ currentRepo }: NavbarProps) {
         </Link>
 
         {currentRepo && (
-          <div className="current-repo-badge">
-            <div className="status-indicator animate-pulse-slow"></div>
+          <div className="current-repo-badge" title={currentRepo}>
+            <div className="status-indicator" />
             <span className="current-repo-text">{currentRepo}</span>
           </div>
         )}
 
-        <div className="navbar-actions">
-          <Link href="/" className="btn btn-secondary btn-sm" style={{ padding: '6px 12px', fontSize: '0.85rem' }}>
+        <div className="navbar-actions" ref={settingsRef}>
+          <Link href="/" className="btn btn-secondary btn-sm nav-btn">
             <Home size={14} />
-            <span>Overview</span>
+            <span className="btn-label">Home</span>
           </Link>
-          
-          <button 
-            onClick={toggleTheme} 
-            className="btn btn-secondary btn-sm"
-            style={{ padding: '6px 10px', fontSize: '0.85rem' }}
-            title={isDarkTheme ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
+
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="btn btn-secondary btn-sm nav-btn icon-only"
+            title={isDarkTheme ? 'Switch to light theme' : 'Switch to dark theme'}
+            aria-label={isDarkTheme ? 'Switch to light theme' : 'Switch to dark theme'}
           >
-            {isDarkTheme ? <Sun size={14} className="icon-orange" /> : <Moon size={14} className="icon-purple" />}
+            {mounted && isDarkTheme ? (
+              <Sun size={14} className="icon-orange" />
+            ) : (
+              <Moon size={14} className="icon-purple" />
+            )}
           </button>
 
-          <button 
-            onClick={() => setShowSettings(!showSettings)} 
-            className={`btn btn-secondary btn-sm ${showSettings ? 'active' : ''}`}
-            style={{ padding: '6px 12px', fontSize: '0.85rem', position: 'relative' }}
+          <button
+            type="button"
+            onClick={() => setShowSettings((v) => !v)}
+            className={`btn btn-secondary btn-sm nav-btn ${showSettings ? 'active' : ''}`}
+            aria-expanded={showSettings}
+            aria-haspopup="dialog"
           >
             <Settings size={14} />
-            <span>PAT Settings</span>
+            <span className="btn-label">PAT</span>
+            {token ? <span className="token-dot" title="Token saved" /> : null}
           </button>
 
           {showSettings && (
-            <div className="settings-dropdown glass-panel animate-fade-in">
+            <div className="settings-dropdown glass-panel animate-fade-in" role="dialog" aria-label="GitHub PAT settings">
               <h4 className="settings-title">
                 <Key size={14} className="icon-cyan" />
                 <span>GitHub Access Token</span>
               </h4>
               <p className="settings-description">
-                Provide a Personal Access Token (PAT) to avoid public API rate limits (60 requests/hr). Tokens are saved locally in your browser.
+                Unauthenticated requests are limited to 60/hour. A PAT raises this to 5,000/hour and enables private repos.
+                Stored only in your browser&apos;s localStorage.
               </p>
               <input
                 type="password"
-                placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                placeholder="ghp_… or github_pat_…"
                 className="glass-input settings-input"
                 value={token}
                 onChange={(e) => setToken(e.target.value)}
+                autoComplete="off"
+                spellCheck={false}
               />
               <div className="settings-actions">
-                {token && (
-                  <button onClick={handleClearToken} className="btn btn-danger btn-sm" style={{ fontSize: '0.75rem', padding: '6px 10px' }}>
+                {token ? (
+                  <button type="button" onClick={handleClearToken} className="btn btn-danger btn-sm">
                     Clear
                   </button>
+                ) : (
+                  <span />
                 )}
-                <button onClick={handleSaveToken} className="btn btn-primary btn-sm" style={{ fontSize: '0.75rem', padding: '6px 12px', marginLeft: 'auto' }}>
-                  {isSaved ? <Check size={12} /> : 'Save Token'}
+                <button type="button" onClick={handleSaveToken} className="btn btn-primary btn-sm">
+                  {isSaved ? <Check size={12} /> : 'Save'}
                 </button>
               </div>
               {isSaved && (
                 <div className="saved-toast">
                   <Check size={12} className="icon-green" />
-                  <span>Preferences saved!</span>
+                  <span>Saved locally</span>
                 </div>
               )}
             </div>
@@ -147,18 +189,19 @@ export default function Navbar({ currentRepo }: NavbarProps) {
           z-index: 100;
           width: 100%;
           background: var(--glass-bg);
-          backdrop-filter: blur(12px);
-          -webkit-backdrop-filter: blur(12px);
+          backdrop-filter: blur(14px);
+          -webkit-backdrop-filter: blur(14px);
           border-bottom: 1px solid var(--border-color);
         }
         .navbar-inner {
           max-width: 1280px;
           margin: 0 auto;
-          padding: 16px 24px;
+          padding: 0 24px;
           display: flex;
           align-items: center;
           justify-content: space-between;
-          height: 64px;
+          height: 60px;
+          gap: 16px;
         }
         .logo-group {
           display: flex;
@@ -166,24 +209,23 @@ export default function Navbar({ currentRepo }: NavbarProps) {
           gap: 10px;
           text-decoration: none;
           color: var(--fg-primary);
+          flex-shrink: 0;
         }
         .logo-icon {
           width: 32px;
           height: 32px;
-          border-radius: 8px;
-          background: linear-gradient(135deg, rgba(255, 69, 48, 0.1), rgba(255, 138, 0, 0.1));
-          border: 1px solid var(--accent-cyan);
+          border-radius: 9px;
+          background: var(--accent-soft);
+          border: 1px solid var(--accent-soft-border);
           display: flex;
           align-items: center;
           justify-content: center;
-          box-shadow: 0 0 10px rgba(255, 69, 48, 0.15);
         }
         .icon-glow {
           color: var(--accent-cyan);
-          filter: drop-shadow(0 0 4px var(--accent-cyan));
         }
         .logo-text {
-          font-size: 1.15rem;
+          font-size: 1.1rem;
           font-weight: 700;
           letter-spacing: -0.02em;
         }
@@ -191,40 +233,70 @@ export default function Navbar({ currentRepo }: NavbarProps) {
           display: flex;
           align-items: center;
           gap: 8px;
-          background: rgba(255, 255, 255, 0.04);
+          background: var(--bg-muted);
           border: 1px solid var(--border-color);
-          padding: 6px 12px;
+          padding: 5px 12px;
           border-radius: 9999px;
-          font-size: 0.85rem;
+          font-size: 0.8rem;
+          max-width: 280px;
+          min-width: 0;
+        }
+        @media (max-width: 640px) {
+          .current-repo-badge {
+            display: none;
+          }
+          .btn-label {
+            display: none;
+          }
         }
         .status-indicator {
           width: 6px;
           height: 6px;
           border-radius: 50%;
-          background-color: var(--accent-cyan);
-          box-shadow: 0 0 8px var(--accent-cyan);
+          background-color: var(--accent-green);
+          box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+          flex-shrink: 0;
         }
         .current-repo-text {
           font-family: var(--font-mono);
           color: var(--fg-secondary);
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
         .navbar-actions {
           display: flex;
           align-items: center;
-          gap: 12px;
+          gap: 8px;
           position: relative;
+          flex-shrink: 0;
+        }
+        .nav-btn.active {
+          border-color: var(--border-focus);
+          background: var(--accent-soft);
+        }
+        .icon-only {
+          padding: 6px 10px;
+        }
+        .token-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: var(--accent-green);
+          margin-left: 2px;
         }
         .settings-dropdown {
           position: absolute;
-          top: calc(100% + 12px);
+          top: calc(100% + 10px);
           right: 0;
-          width: 300px;
+          width: min(320px, calc(100vw - 32px));
           padding: 16px;
           border-radius: 12px;
-          box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+          box-shadow: var(--shadow-lg);
           display: flex;
           flex-direction: column;
           gap: 12px;
+          z-index: 50;
         }
         .settings-title {
           display: flex;
@@ -232,37 +304,35 @@ export default function Navbar({ currentRepo }: NavbarProps) {
           gap: 8px;
           font-size: 0.9rem;
           font-weight: 600;
-        }
-        .icon-cyan {
-          color: var(--accent-cyan);
+          font-family: var(--font-sans);
         }
         .settings-description {
           font-size: 0.75rem;
           color: var(--fg-tertiary);
-          line-height: 1.4;
+          line-height: 1.45;
         }
         .settings-input {
           font-size: 0.8rem;
-          padding: 8px 10px;
+          padding: 9px 12px;
+          font-family: var(--font-mono);
         }
         .settings-actions {
           display: flex;
           align-items: center;
+          justify-content: space-between;
+          gap: 8px;
         }
         .saved-toast {
           display: flex;
           align-items: center;
           gap: 6px;
-          background: rgba(0, 245, 160, 0.08);
-          border: 1px solid rgba(0, 245, 160, 0.2);
+          background: rgba(16, 185, 129, 0.08);
+          border: 1px solid rgba(16, 185, 129, 0.22);
           padding: 6px 10px;
           border-radius: 6px;
           font-size: 0.75rem;
           color: var(--accent-green);
           justify-content: center;
-        }
-        .icon-green {
-          color: var(--accent-green);
         }
       `}</style>
     </header>

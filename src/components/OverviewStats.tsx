@@ -288,7 +288,7 @@ export default function OverviewStats({ stats }: OverviewStatsProps) {
         .lang-bar {
           width: 100%;
           height: 8px;
-          background: rgba(255, 255, 255, 0.04);
+          background: var(--bg-tertiary);
           border-radius: 99px;
           overflow: hidden;
           display: flex;

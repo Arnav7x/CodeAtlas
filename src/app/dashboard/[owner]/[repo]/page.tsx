@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Navbar from '../../../../components/Navbar';
 import OverviewStats from '../../../../components/OverviewStats';
@@ -12,8 +12,19 @@ import { fetchRepositoryData } from '../../../../lib/github';
 import { RepositoryData } from '../../../../lib/mockData';
 import { AlertCircle, RefreshCw, ChevronLeft, Database } from 'lucide-react';
 
-const Github = ({ size = 24, ...props }: React.SVGProps<SVGSVGElement> & { size?: number | string }) => (
-  <svg viewBox="0 0 24 24" width={size} height={size} stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }} {...props}>
+const GithubIcon = ({ size = 24, ...props }: React.SVGProps<SVGSVGElement> & { size?: number | string }) => (
+  <svg
+    viewBox="0 0 24 24"
+    width={size}
+    height={size}
+    stroke="currentColor"
+    strokeWidth="2"
+    fill="none"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    style={{ display: 'inline-block', verticalAlign: 'middle' }}
+    {...props}
+  >
     <path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4" />
     <path d="M9 18c-4.51 2-5-2-7-2" />
   </svg>
@@ -22,61 +33,66 @@ const Github = ({ size = 24, ...props }: React.SVGProps<SVGSVGElement> & { size?
 export default function DashboardPage() {
   const params = useParams();
   const router = useRouter();
-  
-  const owner = params.owner as string;
-  const repo = params.repo as string;
-  
+
+  const owner = decodeURIComponent((params.owner as string) || '');
+  const repo = decodeURIComponent((params.repo as string) || '');
+
   const [data, setData] = useState<RepositoryData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [latencyMs, setLatencyMs] = useState<number | null>(null);
 
-  const loadData = async (forceRefresh = false) => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const token = localStorage.getItem('github_pat') || undefined;
-      const repoData = await fetchRepositoryData(owner, repo, token);
-      setData(repoData);
-    } catch (err: any) {
-      setError(err.message || 'Failed to analyze repository metrics.');
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  };
+  const loadData = useCallback(
+    async (refresh = false) => {
+      if (refresh) setIsRefreshing(true);
+      else setIsLoading(true);
+      setError(null);
+      const started = performance.now();
+
+      try {
+        const token = localStorage.getItem('github_pat') || undefined;
+        const repoData = await fetchRepositoryData(owner, repo, token);
+        setData(repoData);
+        setLatencyMs(Math.round(performance.now() - started));
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to analyze repository metrics.';
+        setError(message);
+        setData(null);
+      } finally {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
+    },
+    [owner, repo]
+  );
 
   useEffect(() => {
     if (owner && repo) {
-      loadData();
+      loadData(false);
     }
-  }, [owner, repo]);
+  }, [owner, repo, loadData]);
 
-  const handleRefresh = () => {
-    setIsRefreshing(true);
-    loadData(true);
-  };
+  const handleBack = () => router.push('/');
 
-  const handleBack = () => {
-    router.push('/');
-  };
-
-  // Render Loader Skeleton
   if (isLoading && !isRefreshing) {
     return (
       <div className="layout-wrapper">
         <Navbar currentRepo={`${owner}/${repo}`} />
         <main className="main-content">
-          <div className="skeleton-header animate-pulse-slow"></div>
+          <div className="skeleton-header" />
           <div className="skeleton-stats-row">
-            {[1, 2, 3, 4].map(i => (
-              <div key={i} className="skeleton-card animate-pulse-slow" style={{ height: '110px' }}></div>
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="skeleton-card" style={{ height: '110px' }} />
             ))}
           </div>
           <div className="skeleton-grid">
-            <div className="skeleton-card animate-pulse-slow" style={{ height: '340px' }}></div>
-            <div className="skeleton-card animate-pulse-slow" style={{ height: '340px' }}></div>
+            <div className="skeleton-card" style={{ height: '320px' }} />
+            <div className="skeleton-card" style={{ height: '320px' }} />
           </div>
+          <p className="skeleton-hint">
+            Loading analysis for <strong>{owner}/{repo}</strong>…
+          </p>
         </main>
         <style jsx>{`
           .layout-wrapper {
@@ -88,62 +104,91 @@ export default function DashboardPage() {
             flex: 1;
             max-width: 1280px;
             margin: 0 auto;
-            padding: 32px 24px;
+            padding: 28px 24px;
             width: 100%;
             display: flex;
             flex-direction: column;
-            gap: 24px;
+            gap: 20px;
           }
           .skeleton-header {
-            height: 48px;
-            background: rgba(255, 255, 255, 0.03);
-            border-radius: 8px;
+            height: 56px;
+            background: var(--bg-muted);
+            border-radius: 10px;
             border: 1px solid var(--border-color);
+            animation: pulse 1.4s ease-in-out infinite;
           }
           .skeleton-stats-row {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 20px;
+            gap: 16px;
+          }
+          @media (max-width: 900px) {
+            .skeleton-stats-row {
+              grid-template-columns: 1fr 1fr;
+            }
           }
           .skeleton-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 24px;
+            gap: 16px;
+          }
+          @media (max-width: 900px) {
+            .skeleton-grid {
+              grid-template-columns: 1fr;
+            }
           }
           .skeleton-card {
-            background: rgba(255, 255, 255, 0.02);
+            background: var(--bg-muted);
             border-radius: 12px;
             border: 1px solid var(--border-color);
+            animation: pulse 1.4s ease-in-out infinite;
+          }
+          .skeleton-hint {
+            font-size: 0.8rem;
+            color: var(--fg-tertiary);
+            text-align: center;
+            margin-top: 8px;
+          }
+          .skeleton-hint strong {
+            color: var(--fg-secondary);
+            font-family: var(--font-mono);
+            font-weight: 500;
+          }
+          @keyframes pulse {
+            0%, 100% { opacity: 0.55; }
+            50% { opacity: 1; }
           }
         `}</style>
       </div>
     );
   }
 
-  // Render Error Message
   if (error) {
     return (
       <div className="layout-wrapper">
         <Navbar currentRepo={`${owner}/${repo}`} />
         <main className="error-main">
           <div className="error-card glass-panel animate-fade-in">
-            <AlertCircle size={48} className="icon-red animate-pulse" />
-            <h2 className="error-title">Analysis Interrupted</h2>
+            <AlertCircle size={40} className="icon-red" />
+            <h2 className="error-title roman-header">Analysis interrupted</h2>
             <p className="error-desc">{error}</p>
-            
+
             <div className="error-hint">
               <Database size={16} className="icon-cyan" />
-              <span>Hint: If this is a private repository or you are making too many requests, add a GitHub PAT in the top-right settings.</span>
+              <span>
+                Private repos and high traffic need a GitHub PAT. Open <strong>PAT</strong> in the top-right, save a token, then
+                retry.
+              </span>
             </div>
 
             <div className="error-actions">
-              <button onClick={handleBack} className="btn btn-secondary">
+              <button type="button" onClick={handleBack} className="btn btn-secondary">
                 <ChevronLeft size={16} />
-                <span>Go Back</span>
+                <span>Go back</span>
               </button>
-              <button onClick={() => loadData()} className="btn btn-primary">
+              <button type="button" onClick={() => loadData(false)} className="btn btn-primary">
                 <RefreshCw size={16} />
-                <span>Try Again</span>
+                <span>Try again</span>
               </button>
             </div>
           </div>
@@ -162,116 +207,110 @@ export default function DashboardPage() {
             padding: 24px;
           }
           .error-card {
-            max-width: 500px;
+            max-width: 480px;
             width: 100%;
-            padding: 40px;
+            padding: 36px 32px;
             display: flex;
             flex-direction: column;
             align-items: center;
             text-align: center;
-            gap: 20px;
-          }
-          .icon-red {
-            color: var(--accent-red);
+            gap: 16px;
           }
           .error-title {
-            font-size: 1.4rem;
-            font-weight: 700;
+            font-size: 1.35rem;
           }
           .error-desc {
             font-size: 0.88rem;
             color: var(--fg-secondary);
-            line-height: 1.5;
+            line-height: 1.55;
           }
           .error-hint {
             display: flex;
             align-items: flex-start;
-            gap: 8px;
-            background: rgba(0, 210, 255, 0.05);
-            border: 1px solid rgba(0, 210, 255, 0.15);
+            gap: 10px;
+            background: var(--accent-soft);
+            border: 1px solid var(--accent-soft-border);
             padding: 12px 14px;
             border-radius: 8px;
             text-align: left;
             font-size: 0.78rem;
             color: var(--fg-secondary);
-            line-height: 1.4;
+            line-height: 1.45;
           }
-          .icon-cyan {
-            color: var(--accent-cyan);
+          .error-hint strong {
+            color: var(--fg-primary);
           }
           .error-actions {
             display: flex;
-            gap: 12px;
-            margin-top: 10px;
+            gap: 10px;
+            margin-top: 6px;
+            flex-wrap: wrap;
+            justify-content: center;
           }
         `}</style>
       </div>
     );
   }
 
-  // Render Dashboard
   return (
     <div className="layout-wrapper">
       <Navbar currentRepo={data ? `${data.owner}/${data.repo}` : `${owner}/${repo}`} />
 
       {data && (
         <main className="main-content">
-          {/* Dashboard Header */}
           <div className="dashboard-header-bar">
-            <button onClick={handleBack} className="back-btn-sm font-mono">
+            <button type="button" onClick={handleBack} className="back-btn-sm">
               <ChevronLeft size={14} />
-              <span>/home</span>
+              <span>Home</span>
             </button>
 
             <div className="dashboard-title-group">
               <div className="repo-avatar-group">
-                <Github size={24} className="icon-cyan" />
+                <GithubIcon size={22} className="icon-cyan" />
               </div>
               <div>
                 <h1 className="dashboard-title">
                   {data.owner}/<span className="gradient-text">{data.repo}</span>
                 </h1>
                 <p className="dashboard-subtitle">
-                  Analysis context compiled from active codebase structures and recent commits.
+                  Compiled from repository structure and recent commit history
+                  {latencyMs != null ? ` · ${latencyMs}ms` : ''}
                 </p>
               </div>
             </div>
 
-            <button 
-              onClick={handleRefresh} 
-              disabled={isRefreshing} 
+            <button
+              type="button"
+              onClick={() => loadData(true)}
+              disabled={isRefreshing}
               className="btn btn-secondary btn-sm refresh-btn"
             >
               <RefreshCw size={14} className={isRefreshing ? 'spinner' : ''} />
-              <span>{isRefreshing ? 'Analyzing...' : 'Re-Analyze'}</span>
+              <span>{isRefreshing ? 'Refreshing…' : 'Re-analyze'}</span>
             </button>
           </div>
 
-          {/* Overview Metrics Cards Row */}
+          {isRefreshing && (
+            <div className="refresh-banner" role="status">
+              Refreshing metrics…
+            </div>
+          )}
+
           <OverviewStats stats={data.stats} />
-
-          {/* Charts Section: Timeline and Collaboration Network */}
-          <ActivityGraph 
-            activity={data.activity} 
-            developers={data.developers} 
-            connections={data.connections} 
-          />
-
-          {/* Hotspots Section: Scatter plot & refactoring candidate details */}
+          <ActivityGraph activity={data.activity} developers={data.developers} connections={data.connections} />
           <HotspotsVisualizer hotspots={data.hotspots} />
-
-          {/* Full Width AI Insights Feed */}
           <InsightsFeed insights={data.insights} />
-
-          {/* Full Width Tree Directory Ownership Map */}
           <OwnershipMap ownershipData={data.ownership} />
         </main>
       )}
 
       <footer className="dashboard-footer">
-        <div className="footer-inner font-mono">
-          <span>CODEATLAS CORE ENGINE v1.2 // PERSISTENT CACHE READY</span>
-          <span>QUERY COMPLETE // LATENCY 142MS</span>
+        <div className="footer-inner">
+          <span>CodeAtlas · engineering intelligence</span>
+          <span>
+            {data ? `${data.owner}/${data.repo}` : `${owner}/${repo}`}
+            {latencyMs != null ? ` · ${latencyMs}ms` : ''}
+          </span>
         </div>
       </footer>
 
@@ -285,7 +324,7 @@ export default function DashboardPage() {
           flex: 1;
           max-width: 1280px;
           margin: 0 auto;
-          padding: 32px 24px;
+          padding: 28px 24px 40px;
           width: 100%;
           display: flex;
           flex-direction: column;
@@ -294,16 +333,15 @@ export default function DashboardPage() {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          margin-bottom: 28px;
+          margin-bottom: 24px;
           gap: 16px;
         }
         @media (max-width: 768px) {
           .dashboard-header-bar {
-            flex-direction: column;
-            align-items: flex-start;
+            flex-wrap: wrap;
           }
           .refresh-btn {
-            align-self: flex-end;
+            margin-left: auto;
           }
         }
         .back-btn-sm {
@@ -314,54 +352,68 @@ export default function DashboardPage() {
           border: none;
           color: var(--fg-tertiary);
           font-size: 0.8rem;
+          font-family: var(--font-mono);
           cursor: pointer;
-          transition: color 0.2s ease;
+          transition: color 0.15s ease;
+          padding: 4px 0;
         }
         .back-btn-sm:hover {
-          color: var(--accent-cyan);
+          color: var(--accent-primary);
         }
         .dashboard-title-group {
           display: flex;
           align-items: center;
           gap: 14px;
           flex: 1;
+          min-width: 0;
         }
         .repo-avatar-group {
           width: 44px;
           height: 44px;
           border-radius: 12px;
-          background: rgba(0, 210, 255, 0.05);
-          border: 1px solid rgba(0, 210, 255, 0.15);
+          background: var(--accent-soft);
+          border: 1px solid var(--accent-soft-border);
           display: flex;
           align-items: center;
           justify-content: center;
+          flex-shrink: 0;
         }
         .dashboard-title {
-          font-size: 1.4rem;
-          font-weight: 800;
+          font-size: 1.3rem;
+          font-weight: 600;
           letter-spacing: -0.02em;
           line-height: 1.2;
-          color: var(--fg-primary);
+          font-family: var(--font-sans);
+          word-break: break-all;
         }
         .dashboard-subtitle {
-          font-size: 0.78rem;
+          font-size: 0.76rem;
           color: var(--fg-secondary);
-          margin-top: 2px;
+          margin-top: 3px;
         }
         .refresh-btn {
-          font-size: 0.8rem;
-          padding: 8px 14px;
+          flex-shrink: 0;
         }
         .spinner {
-          animation: spin 1.2s linear infinite;
+          animation: spin 1s linear infinite;
         }
         @keyframes spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
         }
+        .refresh-banner {
+          font-size: 0.78rem;
+          color: var(--fg-secondary);
+          background: var(--accent-soft);
+          border: 1px solid var(--accent-soft-border);
+          padding: 8px 12px;
+          border-radius: 8px;
+          margin-bottom: 16px;
+          text-align: center;
+        }
         .dashboard-footer {
           border-top: 1px solid var(--border-color);
-          background: rgba(4, 4, 6, 0.8);
+          background: var(--bg-muted);
           padding: 14px 0;
         }
         .footer-inner {
@@ -371,14 +423,11 @@ export default function DashboardPage() {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          font-size: 0.65rem;
+          gap: 12px;
+          flex-wrap: wrap;
+          font-size: 0.68rem;
           color: var(--fg-tertiary);
-          letter-spacing: 0.05em;
-        }
-        .icon-cyan {
-          color: var(--accent-cyan);
-        }
-        .font-mono {
+          letter-spacing: 0.02em;
           font-family: var(--font-mono);
         }
       `}</style>
