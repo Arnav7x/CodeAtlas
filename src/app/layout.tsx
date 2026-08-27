@@ -1,15 +1,17 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Cormorant_Garamond } from "next/font/google";
+import { Plus_Jakarta_Sans, JetBrains_Mono, Cormorant_Garamond } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const sansFont = Plus_Jakarta_Sans({
+  variable: "--font-sans-custom",
   subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700", "800"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const monoFont = JetBrains_Mono({
+  variable: "--font-mono-custom",
   subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
 });
 
 const cormorantSerif = Cormorant_Garamond({
@@ -32,7 +34,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${cormorantSerif.variable}`}
+      className={`${sansFont.variable} ${monoFont.variable} ${cormorantSerif.variable}`}
       suppressHydrationWarning
     >
       <head>
