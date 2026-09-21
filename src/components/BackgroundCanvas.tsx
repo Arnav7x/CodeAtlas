@@ -21,30 +21,48 @@ export default function BackgroundCanvas() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReducedMotion) {
+      // Static, non-animated background for accessibility.
+      return;
+    }
+
     let animationFrameId: number;
     let particles: Particle[] = [];
-    const maxParticles = 45;
+    let running = true;
+    let lastFrame = 0;
+    const maxParticles = window.innerWidth < 640 ? 28 : 45;
     const connectionDist = 120;
-    
+
     // Mouse coords state
     const mouse = { x: -9999, y: -9999, active: false };
 
     const resizeCanvas = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.floor(window.innerWidth * dpr);
+      canvas.height = Math.floor(window.innerHeight * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
 
-    window.addEventListener('resize', resizeCanvas);
+    let resizeTimer: ReturnType<typeof setTimeout>;
+    const onResize = () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(resizeCanvas, 150);
+    };
+
+    window.addEventListener('resize', onResize);
     resizeCanvas();
 
     // Create particles
     const createParticles = () => {
       particles = [];
+      const w = window.innerWidth;
+      const h = window.innerHeight;
       const colors = ['rgba(255, 69, 48, 0.35)', 'rgba(255, 138, 0, 0.35)', 'rgba(171, 112, 255, 0.25)'];
       for (let i = 0; i < maxParticles; i++) {
         particles.push({
-          x: Math.random() * canvas.width,
-          y: Math.random() * canvas.height,
+          x: Math.random() * w,
+          y: Math.random() * h,
           vx: (Math.random() - 0.5) * 0.4,
           vy: (Math.random() - 0.5) * 0.4,
           radius: Math.random() * 2 + 1.5,
@@ -54,11 +72,22 @@ export default function BackgroundCanvas() {
     };
     createParticles();
 
-    // Mouse listeners
+    // Mouse listeners (throttled via rAF flag)
+    let mouseQueued = false;
+    let queuedX = 0;
+    let queuedY = 0;
     const handleMouseMove = (e: MouseEvent) => {
-      mouse.x = e.clientX;
-      mouse.y = e.clientY;
-      mouse.active = true;
+      queuedX = e.clientX;
+      queuedY = e.clientY;
+      if (!mouseQueued) {
+        mouseQueued = true;
+        requestAnimationFrame(() => {
+          mouse.x = queuedX;
+          mouse.y = queuedY;
+          mouse.active = true;
+          mouseQueued = false;
+        });
+      }
     };
 
     const handleMouseLeave = () => {
@@ -67,18 +96,35 @@ export default function BackgroundCanvas() {
       mouse.active = false;
     };
 
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseleave', handleMouseLeave);
+    const onVisibility = () => {
+      running = document.visibilityState === 'visible';
+      if (running) {
+        lastFrame = performance.now();
+        animationFrameId = requestAnimationFrame(draw);
+      }
+    };
 
-    // Animation Loop
-    const draw = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
-      const isDark = document.body.classList.contains('dark-theme');
-      
+    window.addEventListener('mousemove', handleMouseMove, { passive: true });
+    document.addEventListener('mouseleave', handleMouseLeave);
+    document.addEventListener('visibilitychange', onVisibility);
+
+    // Animation Loop (throttled to ~30fps for perf)
+    const draw = (now: number = performance.now()) => {
+      if (!running) return;
+      if (now - lastFrame < 33) {
+        animationFrameId = requestAnimationFrame(draw);
+        return;
+      }
+      lastFrame = now;
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      ctx.clearRect(0, 0, w, h);
+
+      const isDark = document.documentElement.classList.contains('dark-theme');
+
       // Connection line opacity parameters
       const lineAlphaBase = isDark ? 0.08 : 0.05;
-      const lineColor = isDark ? '255, 69, 48' : '255, 69, 48';
+      const lineColor = '255, 69, 48';
 
       // Move and draw particles
       particles.forEach((p, idx) => {
@@ -86,8 +132,8 @@ export default function BackgroundCanvas() {
         p.y += p.vy;
 
         // Bounce boundaries
-        if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
-        if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+        if (p.x < 0 || p.x > w) p.vx *= -1;
+        if (p.y < 0 || p.y > h) p.vy *= -1;
 
         // Mouse attraction/influence
         if (mouse.active) {
@@ -143,19 +189,23 @@ export default function BackgroundCanvas() {
 
       animationFrameId = requestAnimationFrame(draw);
     };
-    draw();
+    animationFrameId = requestAnimationFrame(draw);
 
     return () => {
-      window.removeEventListener('resize', resizeCanvas);
+      running = false;
+      window.removeEventListener('resize', onResize);
       window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseleave', handleMouseLeave);
+      document.removeEventListener('mouseleave', handleMouseLeave);
+      document.removeEventListener('visibilitychange', onVisibility);
+      clearTimeout(resizeTimer);
       cancelAnimationFrame(animationFrameId);
     };
   }, []);
 
   return (
-    <canvas 
-      ref={canvasRef} 
+    <canvas
+      ref={canvasRef}
+      aria-hidden="true"
       className="interactive-bg-canvas"
       style={{
         position: 'fixed',

@@ -77,6 +77,11 @@ export interface RepositoryData {
   ownership: FileNode;
   hotspots: HotspotFile[];
   insights: EngineeringInsight[];
+  meta?: {
+    source: 'live' | 'demo';
+    fetchedAt: string;
+    warnings: string[];
+  };
 }
 
 export const MOCK_REPOSITORIES: Record<string, RepositoryData> = {

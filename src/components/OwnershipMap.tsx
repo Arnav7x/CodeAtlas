@@ -63,11 +63,20 @@ export default function OwnershipMap({ ownershipData }: OwnershipMapProps) {
     }
 
     return (
-      <div key={node.path} className="tree-node-wrapper">
-        <div 
+      <div key={node.path} className="tree-node-wrapper" role="treeitem" aria-expanded={isDirectory ? isExpanded : undefined}>
+        <div
           className={`tree-node glass-card-interactive ${isDirectory ? 'dir-node' : 'file-node'}`}
           style={{ paddingLeft: `${depth * 18 + 12}px` }}
           onClick={() => isDirectory && toggleExpand(node.path)}
+          onKeyDown={(e) => {
+            if (isDirectory && (e.key === 'Enter' || e.key === ' ')) {
+              e.preventDefault();
+              toggleExpand(node.path);
+            }
+          }}
+          role={isDirectory ? 'button' : undefined}
+          tabIndex={isDirectory ? 0 : undefined}
+          aria-label={isDirectory ? `${node.name}, bus factor ${node.busFactor}. Press Enter to ${isExpanded ? 'collapse' : 'expand'}.` : `${node.name}, bus factor ${node.busFactor}`}
         >
           <div className="node-label-group">
             {isDirectory ? (
@@ -146,18 +155,20 @@ export default function OwnershipMap({ ownershipData }: OwnershipMapProps) {
       <div className="search-filter-wrapper">
         <div className="search-input-container">
           <Search size={16} className="search-icon" />
-          <input 
-            type="text" 
-            placeholder="Filter by file path or name..." 
+          <input
+            type="text"
+            placeholder="Filter by file path or name..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="search-input"
+            aria-label="Filter ownership tree by file path or name"
           />
           {searchQuery && (
-            <button 
-              className="clear-search-btn" 
+            <button
+              className="clear-search-btn"
               onClick={() => setSearchQuery('')}
               title="Clear search"
+              aria-label="Clear search"
             >
               <X size={14} />
             </button>
@@ -171,7 +182,7 @@ export default function OwnershipMap({ ownershipData }: OwnershipMapProps) {
           <span className="th-label text-right" style={{ paddingRight: '80px' }}>Redundancy & Contributors Proportions</span>
         </div>
         
-        <div className="tree-root">
+        <div className="tree-root" role="tree" aria-label="Repository ownership tree">
           {renderNode(ownershipData)}
         </div>
       </div>

@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { ActivityPoint, DevNode, DevLink } from '../lib/mockData';
-import { Calendar, GitCommit, GitMerge, Info, Cpu, Users } from 'lucide-react';
+import { Calendar, Info, Cpu, Users } from 'lucide-react';
 
 interface ActivityGraphProps {
   activity: ActivityPoint[];
@@ -17,7 +17,7 @@ export default function ActivityGraph({ activity, developers, connections }: Act
   // Math variables for SVG layout of Collaboration Network
   const width = 450;
   const height = 300;
-  const center = { x: width / 2, y: height / 2 };
+  const center = useMemo(() => ({ x: width / 2, y: height / 2 }), []);
   const radius = 95; // Radius of node circle
 
   const [devPositions, setDevPositions] = useState<Record<string, { x: number; y: number }>>(() => {
@@ -34,52 +34,76 @@ export default function ActivityGraph({ activity, developers, connections }: Act
 
   const [draggedDevId, setDraggedDevId] = useState<string | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const dragFrame = useRef<number | null>(null);
 
   // Keep positions & selection in sync when developers change
+  // (preserve user-dragged positions for devs that persist)
   useEffect(() => {
     if (developers.length === 0) {
       setDevPositions({});
       setSelectedDev(null);
       return;
     }
-    const pos: Record<string, { x: number; y: number }> = {};
-    developers.forEach((dev, idx) => {
-      const angle = (idx / Math.max(developers.length, 1)) * 2 * Math.PI - Math.PI / 2;
-      pos[dev.id] = {
-        x: center.x + radius * Math.cos(angle),
-        y: center.y + radius * Math.sin(angle),
-      };
+    setDevPositions((prev) => {
+      const pos: Record<string, { x: number; y: number }> = {};
+      developers.forEach((dev, idx) => {
+        if (prev[dev.id]) {
+          pos[dev.id] = prev[dev.id];
+        } else {
+          const angle = (idx / Math.max(developers.length, 1)) * 2 * Math.PI - Math.PI / 2;
+          pos[dev.id] = {
+            x: center.x + radius * Math.cos(angle),
+            y: center.y + radius * Math.sin(angle),
+          };
+        }
+      });
+      return pos;
     });
-    setDevPositions(pos);
     setSelectedDev((prev) => {
       if (prev && developers.some((d) => d.id === prev.id)) {
         return developers.find((d) => d.id === prev.id) || developers[0];
       }
       return developers[0];
     });
-  }, [developers]);
+  }, [developers, center, radius]);
 
   const handleMouseDown = (devId: string, e: React.MouseEvent) => {
     e.preventDefault();
     setDraggedDevId(devId);
   };
 
-  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
-    if (!draggedDevId || !svgRef.current) return;
-    const rect = svgRef.current.getBoundingClientRect();
-    // Convert client coordinates to SVG coordinates
-    const x = ((e.clientX - rect.left) / rect.width) * width;
-    const y = ((e.clientY - rect.top) / rect.height) * height;
-    
-    // Constrain within viewBox bounds with padding
-    const boundedX = Math.max(20, Math.min(width - 20, x));
-    const boundedY = Math.max(20, Math.min(height - 20, y));
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent<SVGSVGElement>) => {
+      if (!draggedDevId || !svgRef.current) return;
+      if (dragFrame.current) return;
+      const clientX = e.clientX;
+      const clientY = e.clientY;
+      dragFrame.current = requestAnimationFrame(() => {
+        dragFrame.current = null;
+        if (!svgRef.current) return;
+        const rect = svgRef.current.getBoundingClientRect();
+        // Convert client coordinates to SVG coordinates
+        const x = ((clientX - rect.left) / rect.width) * width;
+        const y = ((clientY - rect.top) / rect.height) * height;
 
-    setDevPositions(prev => ({
-      ...prev,
-      [draggedDevId]: { x: boundedX, y: boundedY }
-    }));
-  };
+        // Constrain within viewBox bounds with padding
+        const boundedX = Math.max(20, Math.min(width - 20, x));
+        const boundedY = Math.max(20, Math.min(height - 20, y));
+
+        setDevPositions((prev) => ({
+          ...prev,
+          [draggedDevId]: { x: boundedX, y: boundedY },
+        }));
+      });
+    },
+    [draggedDevId]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (dragFrame.current) cancelAnimationFrame(dragFrame.current);
+    };
+  }, []);
 
   const handleMouseUp = () => {
     setDraggedDevId(null);
@@ -366,17 +390,30 @@ export default function ActivityGraph({ activity, developers, connections }: Act
                 }
 
                 return (
-                  <g 
-                    key={dev.id} 
+                  <g
+                    key={dev.id}
                     transform={`translate(${pos.x}, ${pos.y})`}
                     className="node-group"
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Select developer ${dev.name}, ${dev.commits} commits`}
+                    aria-pressed={isSelected}
                     onClick={() => setSelectedDev(dev)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setSelectedDev(dev);
+                      }
+                    }}
                     onMouseDown={(e) => handleMouseDown(dev.id, e)}
                     onMouseEnter={() => setHoveredDev(dev.id)}
                     onMouseLeave={() => setHoveredDev(null)}
-                    style={{ 
+                    onFocus={() => setHoveredDev(dev.id)}
+                    onBlur={() => setHoveredDev(null)}
+                    style={{
                       cursor: draggedDevId === dev.id ? 'grabbing' : 'grab',
-                      transition: draggedDevId === dev.id ? 'none' : undefined
+                      transition: draggedDevId === dev.id ? 'none' : undefined,
+                      outline: 'none',
                     }}
                   >
                     {/* Glowing outer circle */}

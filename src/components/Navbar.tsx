@@ -3,46 +3,26 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { GitBranch, Settings, Key, Check, Home, Sun, Moon } from 'lucide-react';
+import { useTheme } from '../hooks/useTheme';
 
 interface NavbarProps {
   currentRepo?: string;
 }
 
-function applyTheme(dark: boolean) {
-  const root = document.documentElement;
-  const body = document.body;
-  if (dark) {
-    root.classList.add('dark-theme');
-    body.classList.add('dark-theme');
-    localStorage.setItem('theme', 'dark');
-  } else {
-    root.classList.remove('dark-theme');
-    body.classList.remove('dark-theme');
-    localStorage.setItem('theme', 'light');
-  }
-}
+const TOKEN_PATTERN = /^(ghp_[A-Za-z0-9]{10,}|github_pat_[A-Za-z0-9_]{10,}|gho_[A-Za-z0-9]{10,}|Bearer\s+.+)$/;
 
 export default function Navbar({ currentRepo }: NavbarProps) {
   const [showSettings, setShowSettings] = useState(false);
   const [token, setToken] = useState('');
+  const [tokenError, setTokenError] = useState('');
   const [isSaved, setIsSaved] = useState(false);
-  const [isDarkTheme, setIsDarkTheme] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  const { isDark: isDarkTheme, mounted, toggle: toggleTheme } = useTheme();
   const settingsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setMounted(true);
-    const savedToken = localStorage.getItem('github_pat') || '';
-    setToken(savedToken);
-
-    const savedTheme = localStorage.getItem('theme');
-    const prefersDark =
-      savedTheme === 'dark' ||
-      (!savedTheme && window.matchMedia?.('(prefers-color-scheme: dark)').matches) ||
-      document.documentElement.classList.contains('dark-theme');
-
-    setIsDarkTheme(!!prefersDark);
-    applyTheme(!!prefersDark);
+    try {
+      setToken(localStorage.getItem('github_pat') || '');
+    } catch {}
   }, []);
 
   // Close settings when clicking outside
@@ -64,14 +44,17 @@ export default function Navbar({ currentRepo }: NavbarProps) {
     };
   }, [showSettings]);
 
-  const toggleTheme = () => {
-    const next = !isDarkTheme;
-    applyTheme(next);
-    setIsDarkTheme(next);
-  };
-
   const handleSaveToken = () => {
-    localStorage.setItem('github_pat', token.trim());
+    const trimmed = token.trim();
+    if (trimmed && !TOKEN_PATTERN.test(trimmed)) {
+      setTokenError('That does not look like a GitHub token (expected ghp_… or github_pat_…).');
+      return;
+    }
+    setTokenError('');
+    try {
+      if (trimmed) localStorage.setItem('github_pat', trimmed);
+      else localStorage.removeItem('github_pat');
+    } catch {}
     setIsSaved(true);
     setTimeout(() => {
       setIsSaved(false);
@@ -80,8 +63,11 @@ export default function Navbar({ currentRepo }: NavbarProps) {
   };
 
   const handleClearToken = () => {
-    localStorage.removeItem('github_pat');
+    try {
+      localStorage.removeItem('github_pat');
+    } catch {}
     setToken('');
+    setTokenError('');
     setIsSaved(true);
     setTimeout(() => {
       setIsSaved(false);
@@ -155,10 +141,15 @@ export default function Navbar({ currentRepo }: NavbarProps) {
                 placeholder="ghp_… or github_pat_…"
                 className="glass-input settings-input"
                 value={token}
-                onChange={(e) => setToken(e.target.value)}
+                onChange={(e) => { setToken(e.target.value); setTokenError(''); }}
                 autoComplete="off"
                 spellCheck={false}
               />
+              {tokenError && (
+                <p className="token-error" role="alert">
+                  {tokenError}
+                </p>
+              )}
               <div className="settings-actions">
                 {token ? (
                   <button type="button" onClick={handleClearToken} className="btn btn-danger btn-sm">
@@ -315,6 +306,11 @@ export default function Navbar({ currentRepo }: NavbarProps) {
           font-size: 0.8rem;
           padding: 9px 12px;
           font-family: var(--font-mono);
+        }
+        .token-error {
+          font-size: 0.72rem;
+          color: var(--accent-red);
+          line-height: 1.4;
         }
         .settings-actions {
           display: flex;

@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Navbar from '../../../../components/Navbar';
+import GithubIcon from '../../../../components/GithubIcon';
 import OverviewStats from '../../../../components/OverviewStats';
 import ActivityGraph from '../../../../components/ActivityGraph';
 import OwnershipMap from '../../../../components/OwnershipMap';
@@ -10,25 +11,7 @@ import HotspotsVisualizer from '../../../../components/HotspotsVisualizer';
 import InsightsFeed from '../../../../components/InsightsFeed';
 import { fetchRepositoryData } from '../../../../lib/github';
 import { RepositoryData } from '../../../../lib/mockData';
-import { AlertCircle, RefreshCw, ChevronLeft, Database } from 'lucide-react';
-
-const GithubIcon = ({ size = 24, ...props }: React.SVGProps<SVGSVGElement> & { size?: number | string }) => (
-  <svg
-    viewBox="0 0 24 24"
-    width={size}
-    height={size}
-    stroke="currentColor"
-    strokeWidth="2"
-    fill="none"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    style={{ display: 'inline-block', verticalAlign: 'middle' }}
-    {...props}
-  >
-    <path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4" />
-    <path d="M9 18c-4.51 2-5-2-7-2" />
-  </svg>
-);
+import { AlertCircle, RefreshCw, ChevronLeft, Database, Download, AlertTriangle } from 'lucide-react';
 
 export default function DashboardPage() {
   const params = useParams();
@@ -51,7 +34,10 @@ export default function DashboardPage() {
       const started = performance.now();
 
       try {
-        const token = localStorage.getItem('github_pat') || undefined;
+        let token: string | undefined;
+        try {
+          token = localStorage.getItem('github_pat') || undefined;
+        } catch {}
         const repoData = await fetchRepositoryData(owner, repo, token);
         setData(repoData);
         setLatencyMs(Math.round(performance.now() - started));
@@ -74,6 +60,19 @@ export default function DashboardPage() {
   }, [owner, repo, loadData]);
 
   const handleBack = () => router.push('/');
+
+  const handleExport = useCallback(() => {
+    if (!data) return;
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${data.owner}-${data.repo}-codeatlas.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, [data]);
 
   if (isLoading && !isRefreshing) {
     return (
@@ -273,22 +272,54 @@ export default function DashboardPage() {
                   {data.owner}/<span className="gradient-text">{data.repo}</span>
                 </h1>
                 <p className="dashboard-subtitle">
-                  Compiled from repository structure and recent commit history
+                  {data.meta?.source === 'demo' ? 'Showcase demo dataset' : 'Compiled from repository structure and recent commit history'}
                   {latencyMs != null ? ` · ${latencyMs}ms` : ''}
                 </p>
+                <div className="meta-badges">
+                  <span className={`source-badge ${data.meta?.source === 'demo' ? 'source-demo' : 'source-live'}`}>
+                    {data.meta?.source === 'demo' ? 'Demo data' : 'Live GitHub data'}
+                  </span>
+                  {data.meta?.fetchedAt && (
+                    <span className="fetched-badge" title={data.meta.fetchedAt}>
+                      {new Date(data.meta.fetchedAt).toLocaleString()}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => loadData(true)}
-              disabled={isRefreshing}
-              className="btn btn-secondary btn-sm refresh-btn"
-            >
-              <RefreshCw size={14} className={isRefreshing ? 'spinner' : ''} />
-              <span>{isRefreshing ? 'Refreshing…' : 'Re-analyze'}</span>
-            </button>
+            <div className="header-actions">
+              <button
+                type="button"
+                onClick={handleExport}
+                className="btn btn-secondary btn-sm refresh-btn"
+                title="Download analysis as JSON"
+              >
+                <Download size={14} />
+                <span>Export</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => loadData(true)}
+                disabled={isRefreshing}
+                className="btn btn-secondary btn-sm refresh-btn"
+              >
+                <RefreshCw size={14} className={isRefreshing ? 'spinner' : ''} />
+                <span>{isRefreshing ? 'Refreshing…' : 'Re-analyze'}</span>
+              </button>
+            </div>
           </div>
+
+          {data.meta?.warnings && data.meta.warnings.length > 0 && (
+            <div className="warnings-banner" role="note" aria-label="Data quality notes">
+              <AlertTriangle size={14} className="icon-orange" />
+              <div>
+                {data.meta.warnings.map((w, i) => (
+                  <p key={i}>{w}</p>
+                ))}
+              </div>
+            </div>
+          )}
 
           {isRefreshing && (
             <div className="refresh-banner" role="status">
@@ -390,6 +421,56 @@ export default function DashboardPage() {
           font-size: 0.76rem;
           color: var(--fg-secondary);
           margin-top: 3px;
+        }
+        .meta-badges {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-top: 8px;
+          flex-wrap: wrap;
+        }
+        .source-badge {
+          font-size: 0.65rem;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          padding: 2px 8px;
+          border-radius: 999px;
+          border: 1px solid var(--border-color);
+        }
+        .source-live {
+          color: var(--accent-green);
+          background: rgba(16, 185, 129, 0.08);
+          border-color: rgba(16, 185, 129, 0.25);
+        }
+        .source-demo {
+          color: var(--accent-purple);
+          background: rgba(139, 92, 246, 0.08);
+          border-color: rgba(139, 92, 246, 0.25);
+        }
+        .fetched-badge {
+          font-size: 0.68rem;
+          color: var(--fg-tertiary);
+          font-family: var(--font-mono);
+        }
+        .header-actions {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-shrink: 0;
+        }
+        .warnings-banner {
+          display: flex;
+          gap: 10px;
+          align-items: flex-start;
+          font-size: 0.76rem;
+          color: var(--fg-secondary);
+          background: rgba(255, 138, 0, 0.07);
+          border: 1px solid rgba(255, 138, 0, 0.2);
+          padding: 10px 12px;
+          border-radius: 8px;
+          margin-bottom: 16px;
+          line-height: 1.5;
         }
         .refresh-btn {
           flex-shrink: 0;

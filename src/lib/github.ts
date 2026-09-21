@@ -32,43 +32,125 @@ const LANGUAGE_COLORS: Record<string, string> = {
   Elixir: '#6e4a7e',
 };
 
-async function fetchGithub(url: string, token?: string) {
+const MAX_TREE_NODES = 250;
+const MAX_DEVELOPERS = 20;
+
+interface ServerPayload {
+  repoInfo: any;
+  contributors: any[];
+  languages: Record<string, number>;
+  commits: any[];
+  prTotal: number | null;
+  prStatus: number;
+  tree: any;
+  partialFailures: string[];
+}
+
+function isBot(login: string): boolean {
+  const l = (login || '').toLowerCase();
+  return (
+    l.endsWith('[bot]') ||
+    l === 'dependabot' ||
+    l === 'dependabot[bot]' ||
+    l.includes('github-actions') ||
+    l.endsWith('-bot') ||
+    l.endsWith('_bot')
+  );
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit, ms = 15000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchGithub(url: string, token?: string, retries = 1): Promise<any> {
   const headers: HeadersInit = {
     Accept: 'application/vnd.github.v3+json',
+    'User-Agent': 'CodeAtlas/1.0',
   };
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  // Client-side fetch only — no Next.js server cache options
-  const res = await fetch(url, { headers });
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetchWithTimeout(url, { headers });
 
-  if (res.status === 403 || res.status === 429) {
-    const rateLimitRemaining = res.headers.get('X-RateLimit-Remaining');
-    if (rateLimitRemaining === '0' || res.status === 429) {
-      throw new Error(
-        'GitHub API rate limit exceeded. Add a Personal Access Token (PAT) via PAT Settings to continue (5,000 requests/hour).'
-      );
+      if (res.status === 403 || res.status === 429) {
+        const remaining = res.headers.get('X-RateLimit-Remaining');
+        const retryAfter = res.headers.get('Retry-After');
+        if (remaining === '0' || res.status === 429) {
+          if (attempt < retries) {
+            const waitMs = retryAfter ? Number(retryAfter) * 1000 : 1200 * (attempt + 1);
+            await new Promise((r) => setTimeout(r, Math.min(waitMs, 5000)));
+            continue;
+          }
+          throw new Error(
+            'GitHub API rate limit exceeded. Add a Personal Access Token (PAT) via PAT Settings to continue (5,000 requests/hour).'
+          );
+        }
+      }
+
+      if (res.status === 401) {
+        throw new Error('GitHub authentication failed. Your PAT is invalid or expired — update it in PAT settings.');
+      }
+
+      if (res.status === 404) {
+        throw new Error(
+          `Repository not found. Check that the owner/repo slug is correct and the repo is public (or provide a PAT with access).`
+        );
+      }
+
+      if (!res.ok) {
+        if (res.status >= 500 && attempt < retries) {
+          await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+          continue;
+        }
+        const body = await res.text().catch(() => '');
+        throw new Error(`GitHub API error: ${res.statusText} (${res.status})${body ? ` — ${body.slice(0, 120)}` : ''}`);
+      }
+
+      return res.json();
+    } catch (err: unknown) {
+      lastError = err;
+      if (err instanceof Error && (err.name === 'AbortError' || err.message.includes('aborted'))) {
+        throw new Error('GitHub request timed out. Check your connection and try again.');
+      }
+      if (err instanceof Error && (/rate limit|not found|authentication failed|timed out/.test(err.message))) {
+        throw err;
+      }
+      if (attempt < retries) {
+        await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
+        continue;
+      }
+      throw err;
     }
   }
-
-  if (res.status === 404) {
-    throw new Error(
-      `Repository not found. Check that the owner/repo slug is correct and the repo is public (or provide a PAT with access).`
-    );
-  }
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`GitHub API error: ${res.statusText} (${res.status})${body ? ` — ${body.slice(0, 120)}` : ''}`);
-  }
-
-  return res.json();
+  throw lastError instanceof Error ? lastError : new Error('GitHub request failed.');
 }
 
 /** Deterministic 0–1 float from a string seed (stable across refreshes). */
 function seededUnit(seed: string): number {
   return (hashCode(seed) % 10000) / 10000;
+}
+
+async function fetchViaServerRoute(owner: string, repo: string, token?: string): Promise<ServerPayload> {
+  const res = await fetchWithTimeout(
+    `/api/repo/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
+    { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+    25000
+  );
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((body as { error?: string }).error || `Analysis service error (${res.status}).`);
+  }
+  return body as ServerPayload;
 }
 
 export async function fetchRepositoryData(
@@ -81,47 +163,99 @@ export async function fetchRepositoryData(
   // Showcase presets use rich mock datasets
   const matchedKey = Object.keys(MOCK_REPOSITORIES).find((k) => k.toLowerCase() === repoSlug);
   if (matchedKey) {
-    return structuredClone(MOCK_REPOSITORIES[matchedKey]);
+    const demo = structuredClone(MOCK_REPOSITORIES[matchedKey]);
+    demo.meta = { source: 'demo', fetchedAt: new Date().toISOString(), warnings: [] };
+    return demo;
+  }
+
+  // Prefer the server proxy (caching, proper PR totals, no CORS surprises).
+  try {
+    const payload = await fetchViaServerRoute(owner, repo, token);
+    return buildRepositoryData(owner, repo, payload);
+  } catch (serverError) {
+    // Fall back to direct GitHub calls (e.g. server route unavailable in static export).
+    try {
+      const repoInfo = await fetchGithub(`https://api.github.com/repos/${owner}/${repo}`, token);
+
+      const [contributors, languagesData, commits] = await Promise.all([
+        fetchGithub(`https://api.github.com/repos/${owner}/${repo}/contributors?per_page=20`, token).catch(
+          () => [] as any[]
+        ),
+        fetchGithub(`https://api.github.com/repos/${owner}/${repo}/languages`, token).catch(
+          () => ({} as Record<string, number>)
+        ),
+        fetchGithub(`https://api.github.com/repos/${owner}/${repo}/commits?per_page=100`, token).catch(
+          () => [] as any[]
+        ),
+      ]);
+
+      let prTotal: number | null = null;
+      try {
+        const prRes = await fetchWithTimeout(
+          `https://api.github.com/repos/${owner}/${repo}/pulls?state=all&per_page=1`,
+          {
+            headers: {
+              Accept: 'application/vnd.github.v3+json',
+              'User-Agent': 'CodeAtlas/1.0',
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+          }
+        );
+        if (prRes.ok) {
+          const link = prRes.headers.get('link');
+          const m = link?.match(/<[^>]*[?&]page=(\d+)[^>]*>;\s*rel="last"/);
+          prTotal = m ? Number(m[1]) : null;
+        }
+      } catch {
+        prTotal = null;
+      }
+
+      const branch = (repoInfo as any).default_branch || 'main';
+      let tree: any = { tree: [] };
+      try {
+        tree = await fetchGithub(
+          `https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`,
+          token
+        );
+      } catch {
+        tree = { tree: [], truncated: true };
+      }
+
+      return buildRepositoryData(owner, repo, {
+        repoInfo,
+        contributors: Array.isArray(contributors) ? contributors : [],
+        languages: languagesData,
+        commits: Array.isArray(commits) ? commits : [],
+        prTotal,
+        prStatus: 200,
+        tree,
+        partialFailures: [],
+      });
+    } catch (err) {
+      if (serverError instanceof Error && /not found|authentication|rate limit/i.test(serverError.message)) {
+        throw serverError;
+      }
+      throw err;
+    }
+  }
+}
+
+function buildRepositoryData(owner: string, repo: string, payload: ServerPayload): RepositoryData {
+  const { repoInfo, contributors, languagesData, commits, prTotal, tree } = payload;
+  const warnings: string[] = [];
+  if (payload.partialFailures?.length) {
+    warnings.push(`Partial data: ${payload.partialFailures.join(', ')} unavailable — metrics use available sources.`);
+  }
+  if ((tree as any)?.truncated) {
+    warnings.push('Repository tree was truncated — ownership map shows a subset of paths.');
   }
 
   try {
-    const repoInfo = await fetchGithub(`https://api.github.com/repos/${owner}/${repo}`, token);
-
-    const [contributors, languagesData, commits, pulls] = await Promise.all([
-      fetchGithub(`https://api.github.com/repos/${owner}/${repo}/contributors?per_page=20`, token).catch(
-        () => [] as any[]
-      ),
-      fetchGithub(`https://api.github.com/repos/${owner}/${repo}/languages`, token).catch(
-        () => ({} as Record<string, number>)
-      ),
-      fetchGithub(`https://api.github.com/repos/${owner}/${repo}/commits?per_page=100`, token).catch(
-        () => [] as any[]
-      ),
-      fetchGithub(
-        `https://api.github.com/repos/${owner}/${repo}/pulls?state=all&per_page=1`,
-        token
-      ).catch(() => null),
-    ]);
-
-    // PR total from Link header when available
-    let prsCount = 0;
-    if (pulls !== null) {
-      // We only got the array; estimate from open issues + a share of commits
-      prsCount = Math.max(0, Math.floor((repoInfo.open_issues_count || 0) * 0.35) + Math.floor(commits.length * 0.4));
-    }
-
-    const branch = repoInfo.default_branch || 'main';
     let treeItems: any[] = [];
-    try {
-      const gitTree = await fetchGithub(
-        `https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`,
-        token
-      );
-      if (gitTree && Array.isArray(gitTree.tree)) {
-        treeItems = gitTree.tree;
-      }
-    } catch {
-      // Tree may fail on huge repos; fall back later
+    const gitTree = tree as any;
+    if (gitTree && Array.isArray(gitTree.tree)) {
+      treeItems = gitTree.tree;
+      if (gitTree.truncated) warnings.push('Repository tree was truncated — ownership map shows a subset of paths.');
     }
 
     // Languages
@@ -144,7 +278,7 @@ export async function fetchRepositoryData(
 
     // Commit analysis
     const commitsByAuthor: Record<string, { count: number; lines: number; files: Set<string> }> = {};
-    const commitsByWeek: Record<string, { commits: number; prs: number; sortKey: number }> = {};
+    const commitsByWeek: Record<string, { commits: number; prs: number; sortKey: number; label: string }> = {};
     const fileModificationCounts: Record<string, { path: string; count: number; bugs: number }> = {};
 
     const realFiles = treeItems.filter((item: any) => item.type === 'blob').map((item: any) => item.path as string);
@@ -152,17 +286,16 @@ export async function fetchRepositoryData(
     (commits as any[]).forEach((c: any, commitIdx: number) => {
       const authorLogin = c.author?.login || c.commit?.author?.name || 'Unknown';
       const dateRaw = c.commit?.author?.date ? new Date(c.commit.author.date) : new Date();
-      const weekStart = getWeekKey(dateRaw);
-      const sortKey = getWeekSortKey(dateRaw);
+      const bucket = getWeekBucket(dateRaw);
 
-      if (!commitsByWeek[weekStart]) {
-        commitsByWeek[weekStart] = { commits: 0, prs: 0, sortKey };
+      if (!commitsByWeek[bucket.key]) {
+        commitsByWeek[bucket.key] = { commits: 0, prs: 0, sortKey: bucket.sortKey, label: bucket.label };
       }
-      commitsByWeek[weekStart].commits += 1;
+      commitsByWeek[bucket.key].commits += 1;
 
       const msg = (c.commit?.message || '').toLowerCase();
       if (msg.includes('merge pull request') || msg.includes('merge branch') || msg.startsWith('merge ')) {
-        commitsByWeek[weekStart].prs += 1;
+        commitsByWeek[bucket.key].prs += 1;
       }
 
       if (!commitsByAuthor[authorLogin]) {
@@ -170,7 +303,7 @@ export async function fetchRepositoryData(
       }
       commitsByAuthor[authorLogin].count += 1;
 
-      // Deterministic line churn estimate
+      // Deterministic line churn estimate (GitHub commit list API omits diff stats).
       const lineSeed = seededUnit(`${c.sha || commitIdx}-${authorLogin}`);
       commitsByAuthor[authorLogin].lines += Math.floor(lineSeed * 200) + 10;
 
@@ -209,7 +342,7 @@ export async function fetchRepositoryData(
             avatar_url: `https://avatars.githubusercontent.com/${login}`,
           }));
 
-    const developers: DevNode[] = contribList.slice(0, 20).map((c: any) => {
+    const developers: DevNode[] = contribList.slice(0, MAX_DEVELOPERS).map((c: any) => {
       const localStats = commitsByAuthor[c.login] || {
         count: Math.ceil((c.contributions || 1) * 0.1),
         lines: (c.contributions || 1) * 50,
@@ -218,7 +351,7 @@ export async function fetchRepositoryData(
       const percentageContribution = (localStats.count / totalCommitsCount) * 100;
 
       let role = 'Contributor';
-      if ((c.login || '').toLowerCase().includes('bot') || (c.login || '').toLowerCase().includes('[bot]')) {
+      if (isBot(c.login || '')) {
         role = 'CI Bot';
       } else if (percentageContribution > 30 || (c.contributions || 0) > totalCommitsCount * 0.4) {
         role = 'Tech Lead';
@@ -238,7 +371,8 @@ export async function fetchRepositoryData(
       };
     });
 
-    // Collaboration edges from co-touched files
+    // Collaboration edges from co-touched files (estimated — commit list API has no per-file diffs).
+    warnings.push('Collaboration links and hotspot scores are estimates derived from recent commit metadata.');
     const connections: DevLink[] = [];
     for (let i = 0; i < developers.length; i++) {
       for (let j = i + 1; j < developers.length; j++) {
@@ -264,16 +398,14 @@ export async function fetchRepositoryData(
     }
 
     // Activity timeline (last 6 weeks)
-    let activity: ActivityPoint[] = Object.entries(commitsByWeek)
-      .map(([date, counts]) => ({
-        date,
-        commits: counts.commits,
-        prs: counts.prs || Math.max(1, Math.ceil(counts.commits * 0.2)),
-        sortKey: counts.sortKey,
-      }))
+    let activity: ActivityPoint[] = Object.values(commitsByWeek)
       .sort((a, b) => a.sortKey - b.sortKey)
       .slice(-6)
-      .map(({ date, commits: c, prs }) => ({ date, commits: c, prs }));
+      .map((counts) => ({
+        date: counts.label,
+        commits: counts.commits,
+        prs: counts.prs || Math.max(1, Math.ceil(counts.commits * 0.2)),
+      }));
 
     // Pad if sparse history
     while (activity.length < 6) {
@@ -283,6 +415,9 @@ export async function fetchRepositoryData(
         commits: Math.floor(padSeed * 12) + 3,
         prs: Math.floor(padSeed * 4) + 1,
       });
+    }
+    if (activity.some((a) => a.date.startsWith('Wk '))) {
+      warnings.push('Sparse recent history — some timeline weeks are illustrative placeholders.');
     }
 
     // Bus factor
@@ -325,6 +460,7 @@ export async function fetchRepositoryData(
 
     let finalTreeItems = treeItems;
     if (finalTreeItems.length === 0) {
+      warnings.push('File tree unavailable — showing a representative structure.');
       finalTreeItems = [
         { path: 'README.md', type: 'blob', size: 1200 },
         { path: 'package.json', type: 'blob', size: 850 },
@@ -337,8 +473,12 @@ export async function fetchRepositoryData(
     }
 
     let nodeCount = 0;
+    let truncated = false;
     for (const item of finalTreeItems) {
-      if (nodeCount > 250) break;
+      if (nodeCount > MAX_TREE_NODES) {
+        truncated = true;
+        break;
+      }
       const parts = item.path.split('/');
       let currentPath = '';
 
@@ -383,6 +523,7 @@ export async function fetchRepositoryData(
         }
       }
     }
+    if (truncated) warnings.push(`Large repository — ownership map limited to ${MAX_TREE_NODES} nodes.`);
 
     // Hotspots
     const hotspots: HotspotFile[] = Object.keys(fileModificationCounts)
@@ -507,11 +648,15 @@ export async function fetchRepositoryData(
       )
     );
 
+    // Prefer contributor totals over repo size (size is KB on disk, not commits).
+    const contribTotal = humanDevs.reduce((sum, d) => sum + d.commits, 0);
+    const totalCommitsEstimate = Math.max(commits.length, contribTotal, Number(repoInfo.open_issues_count || 0) * 0 + commits.length);
+
     const stats: RepoStats = {
-      commits: repoInfo.size ? Math.max(commits.length, Math.floor(repoInfo.size / 4) + 50) : commits.length || 0,
-      prs: prsCount || Math.floor(openIssues * 0.3) + Math.floor(commits.length * 0.25),
+      commits: totalCommitsEstimate || 0,
+      prs: prTotal ?? Math.floor(openIssues * 0.3) + Math.floor(commits.length * 0.25),
       issues: openIssues,
-      contributors: humanDevs.length || developers.length || repoInfo.network_count || 1,
+      contributors: humanDevs.length || developers.length || (repoInfo.network_count as number) || 1,
       busFactor,
       busFactorDevs: busDevs.filter(Boolean),
       codeHealth,
@@ -529,30 +674,35 @@ export async function fetchRepositoryData(
       ownership,
       hotspots,
       insights,
+      meta: { source: 'live', fetchedAt: new Date().toISOString(), warnings: [...new Set(warnings)] },
     };
-  } catch (err: any) {
-    console.error('Error fetching from GitHub API:', err);
-    throw err;
+  } catch (err: unknown) {
+    console.error('Error building repository metrics:', err);
+    throw err instanceof Error ? err : new Error('Failed to analyze repository metrics.');
   }
 }
 
-function getWeekKey(date: Date): string {
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** Week bucket keyed by ISO year+week so Dec/Jan weeks never collide. */
+function getWeekBucket(date: Date): { key: string; label: string; sortKey: number } {
   // Copy so we don't mutate the caller's Date
   const d = new Date(date.getTime());
   const day = d.getDay();
   const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday-start week
   d.setDate(diff);
-  return `${months[d.getMonth()]} ${String(d.getDate()).padStart(2, '0')}`;
+  d.setHours(0, 0, 0, 0);
+  const year = d.getFullYear();
+  const label = `${MONTHS[d.getMonth()]} ${String(d.getDate()).padStart(2, '0')}`;
+  return { key: `${year}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`, label, sortKey: d.getTime() };
+}
+
+function getWeekKey(date: Date): string {
+  return getWeekBucket(date).label;
 }
 
 function getWeekSortKey(date: Date): number {
-  const d = new Date(date.getTime());
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  d.setDate(diff);
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
+  return getWeekBucket(date).sortKey;
 }
 
 function hashCode(str: string): number {
